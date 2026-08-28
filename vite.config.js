@@ -5,5 +5,5 @@ import react from "@vitejs/plugin-react";
 // เช่น ถ้า repo คือ stayhide69/moboard-solver ให้ใส่ base: "/moboard-solver/"
 export default defineConfig({
   plugins: [react()],
-  base: "/REPO_NAME/",
+  base: "/MO-BOARD/",
 });
