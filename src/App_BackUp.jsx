@@ -573,7 +573,7 @@ export default function App() {
     ["station", "เข้าสถานี"],
   ];
   return (
-    <div style={{ background: BG, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
+    <div style={{ background: BG, fontFamily: FONT_BODY, minHeight: "100vh" }} className="w-full flex flex-col items-center">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
         ::placeholder { color: #B7BEC3; opacity: 1; }
         button { transition: opacity 0.15s ease, transform 0.1s ease; }
