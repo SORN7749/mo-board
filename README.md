@@ -32,16 +32,16 @@ git push -u origin main
 
 ## Deploy อัตโนมัติด้วย GitHub Actions (ไม่ต้องมีคอมพ์เลย)
 
-โปรเจกต์นี้ตั้งค่าให้พร้อมสำหรับ repo **https://github.com/stayhide69/MO-BOARD** แล้ว (`vite.config.js` ตั้ง `base: "/MO-BOARD/"` ไว้ให้)
+โปรเจกต์นี้ตั้งค่าให้พร้อมสำหรับ repo **https://github.com/stayhide69/mo-board** แล้ว (`vite.config.js` ตั้ง `base: "/mo-board/"` ไว้ให้)
 
-1. **Push โค้ดทั้งหมด** (รวมโฟลเดอร์ `.github`) ขึ้น repo `stayhide69/MO-BOARD` บน branch `main`
+1. **Push โค้ดทั้งหมด** (รวมโฟลเดอร์ `.github`) ขึ้น repo `stayhide69/mo-board` บน branch `main`
 
 2. **เปิดใช้งาน Pages ให้ build จาก Actions**
    ไปที่ repo บนเว็บ → **Settings → Pages** → "Build and deployment" → **Source** เลือก **"GitHub Actions"**
 
 3. **เสร็จแล้ว** — ทุกครั้งที่ push เข้า `main`, GitHub build+deploy ให้อัตโนมัติ
    ดูสถานะที่แท็บ **Actions** (รอบแรก ~1-2 นาที)
-   เว็บจะอยู่ที่ **https://stayhide69.github.io/MO-BOARD/**
+   เว็บจะอยู่ที่ **https://stayhide69.github.io/mo-board/**
 
 ## หมายเหตุการ Calibrate
 
