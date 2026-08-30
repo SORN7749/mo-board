@@ -33,6 +33,12 @@ const toDeg = (r) => (r * 180) / Math.PI;
 const mod360 = (d) => ((d % 360) + 360) % 360;
 const fmt = (n, d = 1) => (Number.isFinite(n) ? n.toFixed(d) : "—");
 const fmtBrg = (n) => (Number.isFinite(n) ? String(Math.round(mod360(n))).padStart(3, "0") + "°" : "—°");
+function minutesToHHMM(totalMin) {
+  if (!Number.isFinite(totalMin)) return "—";
+  const m = ((Math.round(totalMin) % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60), mm = m % 60;
+  return String(h).padStart(2, "0") + String(mm).padStart(2, "0");
+}
 function hhmmToMinutes(hhmm) {
   const s = String(hhmm).padStart(4, "0");
   const h = parseInt(s.slice(0, 2), 10);
@@ -178,11 +184,13 @@ function TargetSpeedTab() {
     const denom = Vrel.x * Vrel.x + Vrel.y * Vrel.y;
     const tCpaHours = denom > 0 ? -(P2.x * Vrel.x + P2.y * Vrel.y) / denom : NaN;
     const cpaPoint = { x: P2.x + Vrel.x * tCpaHours, y: P2.y + Vrel.y * tCpaHours };
-    const cpaRange = vLen(cpaPoint), cpaBearing = vBrg(cpaPoint), tcpaMin = t2 + tCpaHours * 60;
+    const cpaRange = vLen(cpaPoint), cpaBearing = vBrg(cpaPoint);
+    const tcpaDeltaMin = tCpaHours * 60; // นาทีนับจาก M2 ไปถึงจุด CPA (M3)
+    const tcpaClockMin = t2 + tcpaDeltaMin; // เวลานาฬิกา (นาทีนับเที่ยงคืน) ที่จุด CPA
     const er = polarToXY(Co, So);
     const em = vAdd(er, Vrel);
     setScale(idealScaleForRangeYards(Math.max(r1yd, r2yd)));
-    setResult({ P1, P2, er, em, DRM, SRM, cpaPoint, cpaRange, cpaBearing, tcpaMin, targetCourse: vBrg(em), targetSpeed: vLen(em) });
+    setResult({ P1, P2, er, em, DRM, SRM, cpaPoint, cpaRange, cpaBearing, tcpaDeltaMin, tcpaClockMin, targetCourse: vBrg(em), targetSpeed: vLen(em) });
   }
   function generateProblem() {
     const rc = () => Math.round(Math.random() * 359), rs = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
@@ -219,6 +227,7 @@ function TargetSpeedTab() {
       {rmlSeg && (() => { const a = scD(rmlSeg.a), b = scD(rmlSeg.b); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="2.2" strokeDasharray="9 7" opacity="0.75" />; })()}
       {(() => { const cp = scD(result.cpaPoint); return <line x1={CENTER.x} y1={CENTER.y} x2={cp.sx} y2={cp.sy} stroke={INK} strokeWidth="1.6" strokeDasharray="3 5" opacity="0.6" />; })()}
       {(() => { const cp = scD(result.cpaPoint); return <circle cx={cp.sx} cy={cp.sy} r="8" fill="none" stroke={INK} strokeWidth="2.4" />; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <text x={cp.sx} y={cp.sy - 14} fontSize="18" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">M3</text>; })()}
       {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
       {(() => { const p = scD(result.P1); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M1</text>; })()}
       {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
@@ -244,7 +253,7 @@ function TargetSpeedTab() {
               <ResultItem label="SRM" value={`${fmt(result.SRM)} kt`} />
               <ResultItem label="CPA Range" value={`${fmt(result.cpaRange)} nm`} accent />
               <ResultItem label="CPA Bearing" value={fmtBrg(result.cpaBearing)} accent />
-              <ResultItem label="TCPA" value={`${fmt(result.tcpaMin, 0)} min`} accent />
+              <ResultItem label="TCPA (เวลา)" value={`${minutesToHHMM(result.tcpaClockMin)} (+${fmt(result.tcpaDeltaMin, 0)} นาทีจาก M2)`} accent wide />
             </ResultGrid>
           </>
         ) : <EmptyNote />}
@@ -388,13 +397,15 @@ function WindTab() {
    TAB 3: Station Keeping (Changing Station)
    ============================================================ */
 function StationTab() {
-  const [mode, setMode] = useState("byTime"); // 'byTime' | 'byCourse' | 'minSpeed'
+  const [mode, setMode] = useState("byTime"); // 'byTime' | 'byCourse' | 'bySpeed' | 'minSpeed'
+  const [centerMode, setCenterMode] = useState("ownship"); // 'ownship' | 'guide'
   const [scale, setScale] = useState(2);
   const [guide, setGuide] = useState({ course: "", speed: "" });
-  const [m1, setM1] = useState({ bearing: "", range: "" }); // current relative position of guide from us
-  const [m2, setM2] = useState({ bearing: "", range: "" }); // desired relative position of guide from us
+  const [m1, setM1] = useState({ bearing: "", range: "" });
+  const [m2, setM2] = useState({ bearing: "", range: "" });
   const [timeMinInput, setTimeMinInput] = useState("");
   const [courseInput, setCourseInput] = useState("");
+  const [speedInput, setSpeedInput] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const z = useZoomPan();
@@ -417,6 +428,8 @@ function StationTab() {
     const dir = vBrg(delta);
     const em = polarToXY(Cg, Sg);
     const u = polarToXY(dir, 1);
+    // sign: 'ownship' at center -> er = em - rm  |  'guide' at center -> er = em + rm
+    const sign = centerMode === "ownship" ? -1 : 1;
     let Co, So, timeMin, altNote = null;
 
     if (mode === "byTime") {
@@ -424,25 +437,45 @@ function StationTab() {
       if (Number.isNaN(T) || T <= 0) { setError("กรอกเวลาที่ต้องการใช้ (นาที) ให้ถูกต้อง"); setResult(null); return; }
       const SRM = distNm / (T / 60);
       const rm = polarToXY(dir, SRM);
-      const er = vSub(em, rm);
+      const er = sign < 0 ? vSub(em, rm) : vAdd(em, rm);
       Co = vBrg(er); So = vLen(er); timeMin = T;
     } else if (mode === "byCourse") {
       const Cfix = parseFloat(courseInput);
       if (Number.isNaN(Cfix)) { setError("กรอกเข็มที่จะใช้ให้ถูกต้อง"); setResult(null); return; }
       const uCo = polarToXY(Cfix, 1);
-      const det = uCo.x * u.y - u.x * uCo.y;
+      const a11 = uCo.x, a12 = -sign * u.x, a21 = uCo.y, a22 = -sign * u.y;
+      const det = a11 * a22 - a12 * a21;
       if (Math.abs(det) < 1e-6) { setError("เข็มนี้ขนานกับแนวที่ต้องเคลื่อนที่ — หาคำตอบไม่ได้ ลองเข็มอื่น"); setResult(null); return; }
-      const Sval = (em.x * u.y - em.y * u.x) / det;
-      const SRM = (uCo.x * em.y - uCo.y * em.x) / det;
+      const Sval = (em.x * a22 - a12 * em.y) / det;
+      const SRM = (a11 * em.y - em.x * a21) / det;
       if (Sval <= 0 || SRM <= 0) { setError("เข็มนี้ไม่สามารถพาไปสถานีใหม่ได้ (ความเร็วที่คำนวณได้ติดลบ) ลองเข็มอื่น"); setResult(null); return; }
       Co = mod360(Cfix); So = Sval; timeMin = (distNm / SRM) * 60;
+    } else if (mode === "bySpeed") {
+      const SoFixed = parseFloat(speedInput);
+      if (Number.isNaN(SoFixed) || SoFixed <= 0) { setError("กรอกความเร็วที่จะใช้ให้ถูกต้อง"); setResult(null); return; }
+      const dot = em.x * u.x + em.y * u.y;
+      const emLen2 = em.x * em.x + em.y * em.y;
+      const b = 2 * dot, c = emLen2 - SoFixed * SoFixed;
+      const disc = b * b - 4 * c;
+      if (disc < 0) { setError("ความเร็วนี้ต่ำเกินไป ไม่สามารถพาไปสถานีใหม่ได้ ลองเพิ่มความเร็ว"); setResult(null); return; }
+      const sq = Math.sqrt(disc);
+      const cands = [(-b + sq) / 2, (-b - sq) / 2]
+        .map((rmSigned) => ({ rmSigned, SRM: sign * rmSigned }))
+        .filter((o) => o.SRM > 0.01)
+        .sort((a, b2) => a.SRM - b2.SRM);
+      if (!cands.length) { setError("ไม่มีคำตอบที่เป็นไปได้ที่ความเร็วนี้"); setResult(null); return; }
+      const { rmSigned, SRM } = cands[0];
+      const er = vAdd(em, polarToXY(dir, rmSigned));
+      Co = vBrg(er); So = SoFixed; timeMin = (distNm / SRM) * 60;
+      if (cands.length > 1) altNote = `หมายเหตุ: มีอีกคำตอบหนึ่งที่เข็มอื่น (ใช้เวลา ${fmt((distNm / cands[1].SRM) * 60, 0)} นาที) — ระบบเลือกคำตอบที่ถึงเร็วกว่าให้`;
     } else {
-      const SRM_star = em.x * u.x + em.y * u.y; // projection of em onto u
-      const rm = { x: SRM_star * u.x, y: SRM_star * u.y };
-      const er = vSub(em, rm);
+      const dot = em.x * u.x + em.y * u.y;
+      const rmSigned = -dot;
+      const er = vAdd(em, polarToXY(dir, rmSigned));
+      const SRM = sign * rmSigned;
       Co = vBrg(er); So = vLen(er);
-      timeMin = SRM_star !== 0 ? (distNm / Math.abs(SRM_star)) * 60 : NaN;
-      if (SRM_star <= 0) altNote = "หมายเหตุ: คำตอบนี้เป็นเวกเตอร์สั้นที่สุดทางคณิตศาสตร์ แต่ทิศ SRM ที่ได้ย้อนแนว M1→M2 — ตรวจสอบสถานการณ์จริงอีกครั้ง";
+      timeMin = SRM !== 0 ? (distNm / Math.abs(SRM)) * 60 : NaN;
+      if (SRM <= 0) altNote = "หมายเหตุ: คำตอบนี้เป็นเวกเตอร์สั้นที่สุดทางคณิตศาสตร์ แต่ทิศ SRM ที่ได้ย้อนแนว M1→M2 — ตรวจสอบสถานการณ์จริงอีกครั้ง";
     }
 
     const er = polarToXY(Co, So);
@@ -452,11 +485,12 @@ function StationTab() {
 
   function clearAll() {
     setGuide({ course: "", speed: "" }); setM1({ bearing: "", range: "" }); setM2({ bearing: "", range: "" });
-    setTimeMinInput(""); setCourseInput(""); setResult(null); setError("");
+    setTimeMinInput(""); setCourseInput(""); setSpeedInput(""); setResult(null); setError("");
   }
 
   const sc = (xy) => xyToScreenSpeedScaled(xy.x, xy.y, scale);
   const scD = (xy) => xyToScreenDistanceScaled(xy.x, xy.y, scale);
+  const centerLabel = centerMode === "ownship" ? "เรือเรา" : "GUIDE";
   const boardVectors = result && (
     <g>
       {(() => { const a = scD(result.P1), b = scD(result.P2); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="2.2" strokeDasharray="9 7" opacity="0.75" />; })()}
@@ -469,12 +503,14 @@ function StationTab() {
       {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
       {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="4.2" markerEnd="url(#arrowCrimson)" />; })()}
       {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">em</text>; })()}
+      <text x={CENTER.x} y={CENTER.y + 26} fontSize="13" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">{centerLabel}</text>
     </g>
   );
 
   return (
     <TabShell>
-      <ModeRow options={[["byTime", "รู้เวลา"], ["byCourse", "รู้เข็ม"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
+      <ModeRow options={[["ownship", "เรือเราอยู่ศูนย์กลาง"], ["guide", "Guide อยู่ศูนย์กลาง"]]} value={centerMode} onChange={(v) => { setCenterMode(v); setResult(null); setError(""); }} />
+      <ModeRow options={[["byTime", "รู้เวลา"], ["byCourse", "รู้เข็ม"], ["bySpeed", "รู้ความเร็ว"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
       <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
 
@@ -494,7 +530,7 @@ function StationTab() {
         <SectionLabel>Guide (เรือนำกระบวน)</SectionLabel>
         <TwoField l1="เข็ม °T" l2="ความเร็ว kt" v1={guide.course} v2={guide.speed} onC1={(e) => setGuide((p) => ({ ...p, course: e.target.value }))} onC2={(e) => setGuide((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
         <SubDivider />
-        <SectionLabel>ตำแหน่ง Guide เทียบเรา — ปัจจุบัน (M1) / สถานีใหม่ (M2)</SectionLabel>
+        <SectionLabel>{centerMode === "ownship" ? "ตำแหน่ง Guide เทียบเรา" : "ตำแหน่งเราเทียบ Guide"} — ปัจจุบัน (M1) / สถานีใหม่ (M2)</SectionLabel>
         <div style={rowGrid3} className="mb-1.5"><div /><MiniLabel>แบริ่ง</MiniLabel><MiniLabel>ระยะ</MiniLabel></div>
         <div style={rowGrid3} className="items-center mb-1.5"><PointName>M1</PointName><Field value={m1.bearing} onChange={(e) => setM1((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m1.range} onChange={(e) => setM1((p) => ({ ...p, range: e.target.value }))} placeholder="yds" /></div>
         <div style={rowGrid3} className="items-center"><PointName>M2</PointName><Field value={m2.bearing} onChange={(e) => setM2((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m2.range} onChange={(e) => setM2((p) => ({ ...p, range: e.target.value }))} placeholder="yds" /></div>
@@ -509,6 +545,12 @@ function StationTab() {
           <>
             <SectionLabel>เข็มที่จะใช้เดิน</SectionLabel>
             <Field value={courseInput} onChange={(e) => setCourseInput(e.target.value)} placeholder="°T" />
+          </>
+        )}
+        {mode === "bySpeed" && (
+          <>
+            <SectionLabel>ความเร็วที่จะใช้เดิน</SectionLabel>
+            <Field value={speedInput} onChange={(e) => setSpeedInput(e.target.value)} placeholder="kt" />
           </>
         )}
         {mode === "minSpeed" && <div style={{ color: INK_SOFT }} className="text-xs">ระบบจะหาเข็ม+ความเร็วต่ำสุดที่พาไปสถานีใหม่ได้ให้เอง</div>}
@@ -660,7 +702,15 @@ function Field({ value, onChange, placeholder }) {
       style={{ border: "1px solid #D8D2C0", borderRadius: "7px", padding: "8px 5px", fontFamily: FONT_MONO, color: "#2B2B2B", width: "100%", textAlign: "center", background: "#fff" }} />
   );
 }
-function ResultItem({ label, value, accent }) {
+function ResultItem({ label, value, accent, wide }) {
+  if (wide) {
+    return (
+      <div style={{ gridColumn: "1 / span 2" }} className="flex flex-col items-center text-center gap-0.5 pt-1">
+        <span style={{ color: INK_SOFT }} className="text-xs">{label}</span>
+        <span style={{ color: accent ? CRIMSON : INK, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-between">
       <span style={{ color: INK_SOFT }} className="text-xs">{label}</span>
