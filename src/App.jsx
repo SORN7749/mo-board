@@ -15,18 +15,27 @@ const YARDS_PER_NM = 2025.3718;
 const PAPER = "#F5F1E4";
 const INK = "#1E3A32";
 const INK_SOFT = "#63766C";
-const CRIMSON = "#A6392A";
-const AMBER_DEEP = "#7A5019";
-const AMBER = "#B8863B";
-const BG = "#0B0F0D";
-const PANEL = "#121B17";
-const PANEL_LINE = "#243A31";
-const TEXT_MUTE = "#8CA096";
+const CRIMSON = "#FF5C6C";
+const CRIMSON_DEEP = "#5C1F28";
+const AMBER_DEEP = "#1B6E7D";
+const AMBER = "#4FD8E8";
+const BG = "#050910";
+const PANEL = "rgba(14,24,36,0.66)";
+const PANEL_LINE = "rgba(79,216,232,0.25)";
+const PANEL_LINE_BRIGHT = "rgba(79,216,232,0.6)";
+const TEXT_MUTE = "#6E8B96";
+const TEXT_LIGHT = "#E7F6FA";
+const TEXT_LIGHT_MUTE = "#84A6B2";
 const CARD = "#FCFBF6";
 
-const FONT_HEAD = "'Oswald', sans-serif";
+const FONT_HEAD = "'Orbitron', 'Oswald', sans-serif";
 const FONT_BODY = "'IBM Plex Sans', sans-serif";
 const FONT_MONO = "'IBM Plex Mono', monospace";
+
+// signature: chamfered (angle-cut) corners for interactive controls —
+// distinguishes actionable elements from soft-cornered content cards
+const CHAMFER = "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)";
+const CHAMFER_SM = "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)";
 
 const toRad = (d) => (d * Math.PI) / 180;
 const toDeg = (r) => (r * 180) / Math.PI;
@@ -137,9 +146,11 @@ function ZoomModal({ z, children }) {
   if (!z.zoomed) return null;
   return (
     <div style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
-      <div className="flex justify-between items-center p-3" style={{ background: "#0B0F0D" }}>
-        <span style={{ color: TEXT_MUTE }} className="text-xs">บีบนิ้ว/ลาก เพื่อซูมและเลื่อนดู</span>
-        <button onClick={z.close} style={{ background: CRIMSON, color: "#fff" }} className="w-9 h-9 rounded-full font-bold flex items-center justify-center">✕</button>
+      <div className="flex justify-between items-center px-4 py-3" style={{ background: BG, borderBottom: `1px solid ${PANEL_LINE}` }}>
+        <span style={{ color: AMBER, fontFamily: FONT_MONO, textShadow: `0 0 8px rgba(79,216,232,0.5)` }} className="text-[10px] uppercase tracking-wide">⇕ Pinch / drag to pan &amp; zoom</span>
+        <button onClick={z.close}
+          style={{ background: "transparent", color: CRIMSON, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, boxShadow: `0 0 10px -2px rgba(255,92,108,0.6)` }}
+          className="w-9 h-9 font-bold flex items-center justify-center">✕</button>
       </div>
       <div className="flex-1 overflow-hidden touch-none" onTouchStart={z.onTouchStart} onTouchMove={z.onTouchMove} onTouchEnd={z.onTouchEnd} onWheel={z.onWheel} style={{ background: "#000" }}>
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -242,7 +253,7 @@ function TargetSpeedTab() {
 
   return (
     <TabShell>
-      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลระยะให้อัตโนมัติหลังกด "คำนวณ"' />
+      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลระยะให้อัตโนมัติหลังกด "คำนวณ"' showDistanceRemark />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
       <ResultCard>
         {result ? (
@@ -326,8 +337,13 @@ function WindTab() {
     const er = polarToXY(Co, So);
     const awVec = polarToXY(mod360(Co + delta), dSpeed);
     const ew = vAdd(er, awVec);
+    // sanity check: recompute the relative wind that this Co/So would actually produce
+    const checkAwToward = vSub(ew, er);
+    const checkAwFromTrue = mod360(vBrg(checkAwToward) + 180);
+    const checkRelFrom = mod360(checkAwFromTrue - Co);
+    const checkRelSpeed = vLen(checkAwToward);
     setScale(idealScaleForSpeed(Math.max(So, twSpeed, dSpeed, altSo || 0)));
-    setResult({ mode: "desired", Co, So, altSo, er, ew, awTip: ew });
+    setResult({ mode: "desired", Co, So, altSo, er, ew, awTip: ew, checkRelFrom, checkRelSpeed });
   }
 
   function clearAll() {
@@ -360,6 +376,9 @@ function WindTab() {
         {result && result.mode === "desired" && (
           <>
             <BigAnswer>เดินเข็ม <Accent>{fmtBrg(result.Co)}</Accent> ความเร็ว <Accent>{fmt(result.So)} นอต</Accent></BigAnswer>
+            <div style={{ color: "#5C8A6E" }} className="text-[11px] text-center mt-1">
+              ตรวจคำตอบ: ที่เข็ม/ความเร็วนี้ ลมข้ามดาดฟ้าจะมาจาก {fmtBrg(result.checkRelFrom)} (สัมพัทธ์) ความเร็ว {fmt(result.checkRelSpeed)} kt
+            </div>
             {result.altSo && <div style={{ color: INK_SOFT }} className="text-xs text-center mt-1">(อีกคำตอบที่เป็นไปได้: {fmt(result.altSo)} นอต ที่เข็มอื่น — ระบบเลือกความเร็วต่ำกว่าให้)</div>}
           </>
         )}
@@ -373,16 +392,18 @@ function WindTab() {
             <TwoField l1="เข็ม °T" l2="ความเร็ว kt" v1={own.course} v2={own.speed} onC1={(e) => setOwn((p) => ({ ...p, course: e.target.value }))} onC2={(e) => setOwn((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
             <SubDivider />
             <SectionLabel>ลมที่วัดได้บนดาดฟ้า (Relative Wind)</SectionLabel>
-            <TwoField l1="ทิศลมมา (สัมพัทธ์)" l2="ความเร็ว" v1={rw.from} v2={rw.speed} onC1={(e) => setRw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setRw((p) => ({ ...p, speed: e.target.value }))} p1="°rel" p2="kt" />
+            <TwoField l1="ทิศลมพัดมาจาก (สัมพัทธ์)" l2="ความเร็ว" v1={rw.from} v2={rw.speed} onC1={(e) => setRw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setRw((p) => ({ ...p, speed: e.target.value }))} p1="°rel" p2="kt" />
+            <div style={{ color: INK_SOFT }} className="text-[10px] mt-1">วัดตามเข็มนาฬิกาจากหัวเรือ: 000° = ลมมาตรงหัวเรือ, 090° = มาทางกราบขวา, 180° = มาทางท้ายเรือ</div>
             <ButtonRow onClear={clearAll} onSolve={solveTrueWind} solveLabel="หา True Wind" />
           </>
         ) : (
           <>
             <SectionLabel>ลมจริง (True Wind) ที่ทราบอยู่แล้ว</SectionLabel>
-            <TwoField l1="ทิศลมมา" l2="ความเร็ว" v1={tw.from} v2={tw.speed} onC1={(e) => setTw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setTw((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
+            <TwoField l1="ทิศลมพัดมาจาก (จริง)" l2="ความเร็ว" v1={tw.from} v2={tw.speed} onC1={(e) => setTw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setTw((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
             <SubDivider />
             <SectionLabel>ลมข้ามดาดฟ้าที่ต้องการ (Desired Relative Wind)</SectionLabel>
-            <TwoField l1="ทิศสัมพัทธ์ที่ต้องการ" l2="ความเร็วที่ต้องการ" v1={desired.from} v2={desired.speed} onC1={(e) => setDesired((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setDesired((p) => ({ ...p, speed: e.target.value }))} p1="°rel" p2="kt" />
+            <TwoField l1="ทิศที่ต้องการให้ลมมา (สัมพัทธ์)" l2="ความเร็วที่ต้องการ" v1={desired.from} v2={desired.speed} onC1={(e) => setDesired((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setDesired((p) => ({ ...p, speed: e.target.value }))} p1="°rel เช่น 000" p2="kt" />
+            <div style={{ color: INK_SOFT }} className="text-[10px] mt-1">ปกติการรับ ฮ. ต้องการลมมาตรงหัวเรือหรือใกล้เคียง → ใส่ 000° (เรือจะวิ่งทวนลมโดยประมาณ)</div>
             <ButtonRow onClear={clearAll} onSolve={solveDesired} solveLabel="หาเข็ม/ความเร็ว" />
           </>
         )}
@@ -511,7 +532,7 @@ function StationTab() {
     <TabShell>
       <ModeRow options={[["ownship", "เรือเราอยู่ศูนย์กลาง"], ["guide", "Guide อยู่ศูนย์กลาง"]]} value={centerMode} onChange={(v) => { setCenterMode(v); setResult(null); setError(""); }} />
       <ModeRow options={[["byTime", "รู้เวลา"], ["byCourse", "รู้เข็ม"], ["bySpeed", "รู้ความเร็ว"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
-      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' />
+      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' showDistanceRemark />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
 
       <ResultCard>
@@ -565,41 +586,275 @@ function StationTab() {
 /* ============================================================
    APP — tab switcher
    ============================================================ */
+/* ============================================================
+   TAB 4: Time–Speed–Distance nomogram (60 D = S T)
+   ============================================================ */
+const YD_PER_UNIT = { yd: 1, nm: YARDS_PER_NM, mi: 1760 };
+const UNIT_LABEL = { yd: "หลา", nm: "ไมล์ทะเล", mi: "ไมล์บก" };
+const YD_PER_KT_MIN = YARDS_PER_NM / 60; // 1 นอต * 1 นาที = ระยะเป็นหลา
+
+/* ---- log-nomogram alignment math (verified: 60D(nm)=S*T, D stored in yards) ----
+   Three parallel scales — Time (top), Distance (middle), Speed (bottom).
+   Distance sits exactly halfway between Time and Speed, so with
+   m_time = m_speed = 2 * m_dist, a straight line between the Time and
+   Speed points always crosses the Distance line at the true answer. */
+const NOMO_M3 = 130, NOMO_M1 = 260, NOMO_M2 = 260;
+const NOMO_ANCHOR_X = 400;
+const NOMO_C1 = NOMO_ANCHOR_X - NOMO_M1 * Math.log10(10);
+const NOMO_C2 = NOMO_ANCHOR_X - NOMO_M2 * Math.log10(10);
+const NOMO_C3 = 0.5 * (NOMO_C1 + NOMO_C2) + NOMO_M3 * Math.log10(60) - NOMO_M3 * Math.log10(YARDS_PER_NM);
+const nomoXT = (T) => NOMO_M1 * Math.log10(T) + NOMO_C1;
+const nomoXS = (S) => NOMO_M2 * Math.log10(S) + NOMO_C2;
+const nomoXD = (Dyd) => NOMO_M3 * Math.log10(Dyd) + NOMO_C3;
+const nomoTAtX = (x) => Math.pow(10, (x - NOMO_C1) / NOMO_M1);
+const nomoSAtX = (x) => Math.pow(10, (x - NOMO_C2) / NOMO_M2);
+const nomoDAtX = (x) => Math.pow(10, (x - NOMO_C3) / NOMO_M3);
+
+function niceTicks(vMin, vMax) {
+  const ticks = [];
+  const kMin = Math.floor(Math.log10(vMin));
+  const kMax = Math.ceil(Math.log10(vMax));
+  for (let k = kMin; k <= kMax; k++) {
+    for (let d = 1; d <= 9; d++) {
+      const v = d * Math.pow(10, k);
+      if (v >= vMin * 0.97 && v <= vMax * 1.03) ticks.push({ value: v, major: d === 1 || d === 2 || d === 5 });
+    }
+  }
+  return ticks;
+}
+function fmtTick(v) {
+  if (v >= 1000) return (v / 1000).toFixed(v % 1000 === 0 ? 0 : 1) + "k";
+  if (v >= 10) return String(Math.round(v));
+  return v % 1 === 0 ? String(v) : v.toFixed(1);
+}
+
+const NOMO_SCREEN_L = 46, NOMO_SCREEN_R = 690, NOMO_VB_W = 736, NOMO_VB_H = 210;
+function NomogramGraphic({ T, S, Dyd }) {
+  const haveLine = Number.isFinite(T) && Number.isFinite(S) && Number.isFinite(Dyd) && T > 0 && S > 0 && Dyd > 0;
+  const xT = haveLine ? nomoXT(T) : NOMO_ANCHOR_X;
+  const xS = haveLine ? nomoXS(S) : NOMO_ANCHOR_X;
+  const xD = haveLine ? nomoXD(Dyd) : nomoXD(nomoDAtX(NOMO_ANCHOR_X));
+  const half = Math.max(Math.abs(xT - xD), Math.abs(xS - xD), 80) * 1.4;
+  const wMin = xD - half, wMax = xD + half;
+  const screenX = (x) => NOMO_SCREEN_L + ((x - wMin) / (wMax - wMin)) * (NOMO_SCREEN_R - NOMO_SCREEN_L);
+
+  const rows = [
+    { y: 34, label: "TIME (min)", tMin: nomoTAtX(wMin), tMax: nomoTAtX(wMax), toX: (v) => screenX(nomoXT(v)), mark: haveLine ? T : null, unit: "min" },
+    { y: 106, label: "DISTANCE (yd)", tMin: nomoDAtX(wMin), tMax: nomoDAtX(wMax), toX: (v) => screenX(nomoXD(v)), mark: haveLine ? Dyd : null, unit: "yd" },
+    { y: 178, label: "SPEED (kt)", tMin: nomoSAtX(wMin), tMax: nomoSAtX(wMax), toX: (v) => screenX(nomoXS(v)), mark: haveLine ? S : null, unit: "kt" },
+  ];
+
+  return (
+    <svg viewBox={`0 0 ${NOMO_VB_W} ${NOMO_VB_H}`} className="w-full h-auto">
+      {rows.map((row, i) => {
+        const ticks = niceTicks(Math.max(row.tMin, 0.01), row.tMax);
+        return (
+          <g key={i}>
+            <text x={NOMO_SCREEN_L} y={row.y - 14} fontSize="9" fontFamily={FONT_MONO} fill={TEXT_MUTE} letterSpacing="0.08em">{row.label}</text>
+            <line x1={NOMO_SCREEN_L} y1={row.y} x2={NOMO_SCREEN_R} y2={row.y} stroke={PANEL_LINE_BRIGHT} strokeWidth="1" />
+            {ticks.map((t, j) => {
+              const x = row.toX(t.value);
+              if (x < NOMO_SCREEN_L - 2 || x > NOMO_SCREEN_R + 2) return null;
+              return (
+                <g key={j}>
+                  <line x1={x} y1={row.y - (t.major ? 7 : 4)} x2={x} y2={row.y + (t.major ? 7 : 4)} stroke={t.major ? AMBER : PANEL_LINE_BRIGHT} strokeWidth={t.major ? 1.1 : 0.7} />
+                  {t.major && <text x={x} y={row.y + 19} fontSize="8.5" fontFamily={FONT_MONO} fill={TEXT_MUTE} textAnchor="middle">{fmtTick(t.value)}</text>}
+                </g>
+              );
+            })}
+            {row.mark !== null && (() => {
+              const x = row.toX(row.mark);
+              return (
+                <g>
+                  <circle cx={x} cy={row.y} r="4" fill={CRIMSON} stroke="#fff" strokeWidth="1" />
+                  <text x={x} y={row.y - 12} fontSize="9.5" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">{fmtTick(row.mark)}</text>
+                </g>
+              );
+            })()}
+          </g>
+        );
+      })}
+      {haveLine && (
+        <line x1={screenX(xT)} y1={rows[0].y} x2={screenX(xS)} y2={rows[2].y} stroke={CRIMSON} strokeWidth="1.6" strokeDasharray="1 0" opacity="0.85" />
+      )}
+    </svg>
+  );
+}
+
+function TSDTab() {
+  const [mode, setMode] = useState("speed"); // 'speed' | 'time' | 'distance'
+  const [timeInput, setTimeInput] = useState("");
+  const [speedInput, setSpeedInput] = useState("");
+  const [distInput, setDistInput] = useState("");
+  const [distUnit, setDistUnit] = useState("yd");
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  function solve() {
+    setError("");
+    const T = parseFloat(timeInput);
+    const S = parseFloat(speedInput);
+    const Dval = parseFloat(distInput);
+    const Dyd = Dval * YD_PER_UNIT[distUnit];
+
+    if (mode === "speed") {
+      if (Number.isNaN(T) || T <= 0 || Number.isNaN(Dval) || Dval <= 0) { setError("กรอกเวลาและระยะให้ครบและถูกต้อง"); setResult(null); return; }
+      const speedKt = Dyd / (T * YD_PER_KT_MIN);
+      setResult({ mode, speedKt, T, S: speedKt, Dyd });
+    } else if (mode === "time") {
+      if (Number.isNaN(S) || S <= 0 || Number.isNaN(Dval) || Dval <= 0) { setError("กรอกความเร็วและระยะให้ครบและถูกต้อง"); setResult(null); return; }
+      const timeMin = Dyd / (S * YD_PER_KT_MIN);
+      setResult({ mode, timeMin, S, T: timeMin, Dyd });
+    } else {
+      if (Number.isNaN(S) || S <= 0 || Number.isNaN(T) || T <= 0) { setError("กรอกความเร็วและเวลาให้ครบและถูกต้อง"); setResult(null); return; }
+      const distYd = S * T * YD_PER_KT_MIN;
+      setResult({ mode, distYd, S, T, Dyd: distYd });
+    }
+  }
+  function clearAll() {
+    setTimeInput(""); setSpeedInput(""); setDistInput(""); setResult(null); setError("");
+  }
+
+  return (
+    <TabShell>
+      <ModeRow options={[["speed", "หาความเร็ว"], ["time", "หาเวลา"], ["distance", "หาระยะ"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
+
+      <ResultCard>
+        {result ? (
+          <>
+            {result.mode === "speed" && <BigAnswer>ความเร็ว <Accent>{fmt(result.speedKt)} นอต</Accent></BigAnswer>}
+            {result.mode === "time" && <BigAnswer>ใช้เวลา <Accent>{fmt(result.timeMin)} นาที</Accent></BigAnswer>}
+            {result.mode === "distance" && (
+              <BigAnswer>ระยะ <Accent>{fmt(result.distYd, 0)} หลา</Accent></BigAnswer>
+            )}
+            {result.mode === "distance" && (
+              <ResultGrid>
+                <ResultItem label="ไมล์ทะเล (nm)" value={fmt(result.distYd / YARDS_PER_NM, 2)} />
+                <ResultItem label="ไมล์บก (mi)" value={fmt(result.distYd / 1760, 2)} />
+              </ResultGrid>
+            )}
+          </>
+        ) : <EmptyNote />}
+      </ResultCard>
+
+      <GlassPanel>
+        <SectionLabel>เส้นมาร์คบนสเกล (เหมือนขีดด้วยดินสอ)</SectionLabel>
+        <NomogramGraphic T={result ? result.T : NaN} S={result ? result.S : NaN} Dyd={result ? result.Dyd : NaN} />
+        {!result && <div style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] text-center mt-1">คำนวณก่อนเพื่อดูเส้นมาร์ค</div>}
+      </GlassPanel>
+
+      <InputCard>
+        <SectionLabel>สูตร: 60 × ระยะ(nm) = ความเร็ว(kt) × เวลา(min)</SectionLabel>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr", rowGap: "10px" }}>
+          {mode !== "time" && (
+            <div>
+              <MiniLabel>เวลา (นาที)</MiniLabel>
+              <Field value={timeInput} onChange={(e) => setTimeInput(e.target.value)} placeholder="min" />
+            </div>
+          )}
+          {mode !== "speed" && (
+            <div>
+              <MiniLabel>ความเร็ว (นอต)</MiniLabel>
+              <Field value={speedInput} onChange={(e) => setSpeedInput(e.target.value)} placeholder="kt" />
+            </div>
+          )}
+          {mode !== "distance" && (
+            <div>
+              <MiniLabel>ระยะทาง</MiniLabel>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: "8px" }}>
+                <Field value={distInput} onChange={(e) => setDistInput(e.target.value)} placeholder="ระยะ" />
+                <div className="flex gap-1">
+                  {["yd", "nm", "mi"].map((u) => (
+                    <button key={u} onClick={() => setDistUnit(u)}
+                      style={{
+                        background: distUnit === u ? "rgba(79,216,232,0.16)" : PANEL,
+                        color: distUnit === u ? AMBER : TEXT_MUTE,
+                        border: `1px solid ${distUnit === u ? AMBER : PANEL_LINE}`,
+                        clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
+                      }}
+                      className="px-2.5 text-[10px] font-bold uppercase">{u}</button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9px] mt-1">{UNIT_LABEL[distUnit]}</div>
+            </div>
+          )}
+        </div>
+        <ButtonRow onClear={clearAll} onSolve={solve} solveLabel="คำนวณ" />
+        {error && <ErrorText>{error}</ErrorText>}
+      </InputCard>
+    </TabShell>
+  );
+}
+
+function TabIcon({ id, active }) {
+  const color = active ? AMBER : TEXT_MUTE;
+  const common = { width: 15, height: 15, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (id === "target") return (
+    <svg {...common}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="2.3" fill={color} stroke="none" /><line x1="12" y1="1" x2="12" y2="4.5" /><line x1="12" y1="19.5" x2="12" y2="23" /><line x1="1" y1="12" x2="4.5" y2="12" /><line x1="19.5" y1="12" x2="23" y2="12" /></svg>
+  );
+  if (id === "wind") return (
+    <svg {...common}><path d="M2 8h13a3 3 0 1 0-3-3" /><path d="M2 16h17a3 3 0 1 1-3 3" /><path d="M2 12h9" /></svg>
+  );
+  if (id === "tsd") return (
+    <svg {...common}><rect x="2" y="6" width="20" height="12" rx="1.5" /><line x1="6" y1="6" x2="6" y2="10" /><line x1="10" y1="6" x2="10" y2="9" /><line x1="14" y1="6" x2="14" y2="10" /><line x1="18" y1="6" x2="18" y2="9" /></svg>
+  );
+  return (
+    <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5 10 10l-1.5 5.5L14 14l1.5-5.5z" fill={color} stroke="none" /></svg>
+  );
+}
 export default function App() {
   const [tab, setTab] = useState("target");
   const tabs = [
-    ["target", "เข็ม/ความเร็วเป้า"],
+    ["target", "เข็ม/ความเร็ว"],
     ["wind", "ปัญหาลม"],
     ["station", "เข้าสถานี"],
+    ["tsd", "T-S-D"],
   ];
   return (
-    <div
-      style={{
-        background: BG,
-        fontFamily: FONT_BODY,
-        height: "100dvh",
-        overflowY: "auto",
-        overflowX: "hidden",
-        overscrollBehavior: "none",
-      }}
-      className="w-full flex flex-col items-center"
-    >
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+    <div style={{ background: BG, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
         ::placeholder { color: #B7BEC3; opacity: 1; }
-        button { transition: opacity 0.15s ease, transform 0.1s ease; }
-        button:active { transform: scale(0.97); }
+        button { transition: opacity 0.15s ease, transform 0.1s ease, background 0.15s ease; }
+        button:active { transform: scale(0.96); }
         input { font-size: 16px !important; }
       `}</style>
-      <div className="w-full max-w-md flex gap-1 px-4 pt-4">
-        {tabs.map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)}
-            style={{ background: tab === id ? PANEL : "transparent", color: tab === id ? "#E8B04B" : TEXT_MUTE, border: `1px solid ${tab === id ? PANEL_LINE : "transparent"}` }}
-            className="flex-1 text-[11px] px-2 py-2 rounded-t-lg font-semibold">{label}</button>
-        ))}
+
+      <div className="w-full max-w-md flex items-center justify-between px-4 pt-4 pb-1">
+        <div className="flex items-center gap-2">
+          <span style={{ background: AMBER, boxShadow: `0 0 8px ${AMBER}` }} className="w-1.5 h-1.5 rounded-full inline-block" />
+          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.16em", color: TEXT_LIGHT, textShadow: `0 0 10px rgba(79,216,232,0.4)` }} className="text-[13px] uppercase">MB · Solver</span>
+        </div>
+        <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9px] uppercase tracking-widest">Pub.1310 Ref</span>
       </div>
-      {tab === "target" && <TargetSpeedTab />}
-      {tab === "wind" && <WindTab />}
-      {tab === "station" && <StationTab />}
+
+      <div className="w-full max-w-md flex gap-1 px-4">
+        {tabs.map(([id, label]) => {
+          const active = tab === id;
+          return (
+            <button key={id} onClick={() => setTab(id)}
+              style={{
+                background: active ? "rgba(79,216,232,0.08)" : "transparent",
+                color: active ? TEXT_LIGHT : TEXT_MUTE,
+                borderTop: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
+                borderLeft: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
+                borderRight: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
+                borderBottom: `2px solid ${active ? AMBER : "transparent"}`,
+                boxShadow: active ? `0 -2px 16px -6px rgba(79,216,232,0.5)` : "none",
+              }}
+              className="flex-1 flex flex-col items-center gap-1 text-[10px] px-2 pt-2.5 pb-2 rounded-t-md font-semibold uppercase tracking-wide">
+              <TabIcon id={id} active={active} />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ borderTop: `1px solid ${PANEL_LINE}`, background: "rgba(6,11,18,0.5)" }} className="w-full">
+        {tab === "target" && <TargetSpeedTab />}
+        {tab === "wind" && <WindTab />}
+        {tab === "station" && <StationTab />}
+        {tab === "tsd" && <TSDTab />}
+      </div>
     </div>
   );
 }
@@ -608,81 +863,173 @@ export default function App() {
    Shared layout pieces
    ============================================================ */
 function TabShell({ children }) {
-  return <div className="w-full flex flex-col items-center p-4 gap-4">{children}</div>;
+  return <div className="w-full flex flex-col items-center p-4 gap-3.5">{children}</div>;
 }
-function BoardCard({ children, zOpen }) {
+function CornerBrackets({ color = AMBER }) {
+  const s = 16, w = 2;
+  const arm = (style) => <div style={{ position: "absolute", width: s, height: s, filter: `drop-shadow(0 0 3px ${color})`, ...style }} />;
   return (
-    <div style={{ background: PAPER }} className="w-full max-w-md rounded-xl p-2 shadow-lg relative">
-      <button onClick={zOpen} style={{ background: "rgba(30,58,50,0.88)", color: "#fff" }} className="absolute top-3 right-3 z-10 text-[11px] px-2.5 py-1.5 rounded-md font-medium">⤢ ขยาย / ซูม</button>
+    <>
+      {arm({ top: -1, left: -1, borderTop: `${w}px solid ${color}`, borderLeft: `${w}px solid ${color}` })}
+      {arm({ top: -1, right: -1, borderTop: `${w}px solid ${color}`, borderRight: `${w}px solid ${color}` })}
+      {arm({ bottom: -1, left: -1, borderBottom: `${w}px solid ${color}`, borderLeft: `${w}px solid ${color}` })}
+      {arm({ bottom: -1, right: -1, borderBottom: `${w}px solid ${color}`, borderRight: `${w}px solid ${color}` })}
+    </>
+  );
+}
+function GlassPanel({ children, accentLeft, style }) {
+  return (
+    <div
+      style={{
+        background: "linear-gradient(155deg, rgba(18,30,44,0.82), rgba(9,15,23,0.86))",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+        border: `1px solid ${PANEL_LINE}`,
+        borderLeft: accentLeft ? `3px solid ${AMBER}` : `1px solid ${PANEL_LINE}`,
+        boxShadow: accentLeft ? `0 0 22px -6px rgba(79,216,232,0.35), 0 8px 24px -8px rgba(0,0,0,0.6)` : "0 8px 24px -8px rgba(0,0,0,0.6)",
+        ...style,
+      }}
+      className="w-full max-w-md rounded-md p-4 relative overflow-hidden"
+    >
       {children}
     </div>
   );
 }
-function ResultCard({ children }) {
-  return <div style={{ background: PAPER }} className="w-full max-w-md rounded-xl p-4 shadow-lg">{children}</div>;
-}
-function InputCard({ children }) {
-  return <div style={{ background: CARD }} className="w-full max-w-md rounded-xl p-4 shadow-lg">{children}</div>;
-}
-function EmptyNote() {
-  return <div style={{ color: INK_SOFT }} className="text-sm text-center py-2">กรอกข้อมูลด้านล่างแล้วกด "คำนวณ" เพื่อดูคำตอบ</div>;
-}
-function BigAnswer({ children }) {
-  return <div style={{ color: INK, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-base text-center mb-1">{children}</div>;
-}
-function Accent({ children }) {
-  return <span style={{ color: CRIMSON }}>{children}</span>;
-}
-function ResultGrid({ children }) {
-  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: "8px", columnGap: "12px", borderTop: "1px solid #DCD6C2", paddingTop: "10px", marginTop: "8px" }} className="text-sm">{children}</div>;
-}
-function SectionLabel({ children }) {
-  return <div style={{ color: "#8B98A3", fontFamily: FONT_HEAD, letterSpacing: "0.08em" }} className="text-[11px] uppercase mb-2">{children}</div>;
-}
-function SubDivider() {
-  return <div style={{ borderTop: "1px solid #E7E2D0", marginTop: "12px", paddingTop: "12px" }} />;
-}
-function ErrorText({ children }) {
-  return <div style={{ color: CRIMSON }} className="text-xs mt-2.5">{children}</div>;
-}
-function ModeRow({ options, value, onChange }) {
+function BoardCard({ children, zOpen }) {
   return (
-    <div className="w-full max-w-md flex gap-2 flex-wrap justify-center">
-      {options.map(([id, label]) => (
-        <button key={id} onClick={() => onChange(id)}
-          style={{ background: value === id ? "#3B5A6B" : PANEL, color: value === id ? "#fff" : TEXT_MUTE, border: `1px solid ${value === id ? "#3B5A6B" : PANEL_LINE}` }}
-          className="px-3 py-1.5 rounded-full text-xs font-semibold">{label}</button>
-      ))}
+    <div className="w-full max-w-md relative" style={{ padding: "2px" }}>
+      <CornerBrackets />
+      <div style={{ background: PAPER, borderRadius: "3px", boxShadow: `0 0 26px -8px rgba(79,216,232,0.4)` }} className="p-2 relative">
+        <button onClick={zOpen}
+          style={{ background: "rgba(5,9,16,0.85)", color: AMBER, border: `1px solid ${AMBER}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, letterSpacing: "0.04em", boxShadow: "0 0 10px -2px rgba(79,216,232,0.6)" }}
+          className="absolute top-3 right-3 z-10 text-[10px] px-3 py-1.5 font-semibold uppercase">⤢ Zoom</button>
+        {children}
+      </div>
     </div>
   );
 }
-function ScaleRow({ scale, setScale, extra, note }) {
+function ResultCard({ children }) {
   return (
-    <div className="w-full max-w-md flex items-center justify-center gap-2 flex-wrap">
-      <span style={{ color: TEXT_MUTE }} className="text-xs uppercase tracking-wide">Scale</span>
-      {[2, 3, 4, 5].map((s) => (
-        <button key={s} onClick={() => setScale(s)}
-          style={{ background: scale === s ? CRIMSON : PANEL, color: scale === s ? "#fff" : TEXT_MUTE, border: `1px solid ${scale === s ? CRIMSON : PANEL_LINE}` }}
-          className="px-3 py-1 rounded-full text-xs font-semibold">{s}:1</button>
-      ))}
-      <span style={{ color: TEXT_MUTE }} className="text-[10px]">({extra})</span>
-      {note && <span style={{ color: "#5C8A6E" }} className="text-[10px] w-full text-center">{note}</span>}
+    <GlassPanel accentLeft>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40%", background: `linear-gradient(180deg, rgba(79,216,232,0.06), transparent)`, animation: "scanline 5s linear infinite", pointerEvents: "none" }} />
+      {children}
+    </GlassPanel>
+  );
+}
+function InputCard({ children }) {
+  return <GlassPanel>{children}</GlassPanel>;
+}
+function EmptyNote() {
+  return (
+    <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_MONO }} className="text-xs text-center py-2 uppercase tracking-wide">
+      — กรอกข้อมูลด้านล่างแล้วกด "คำนวณ" —
+    </div>
+  );
+}
+function BigAnswer({ children }) {
+  return (
+    <div>
+      <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.22em" }} className="text-[10px] uppercase text-center mb-1.5">◆ Output</div>
+      <div style={{ color: TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700, textShadow: "0 0 14px rgba(79,216,232,0.25)" }} className="text-[15px] text-center mb-1 leading-relaxed">{children}</div>
+    </div>
+  );
+}
+function Accent({ children }) {
+  return <span style={{ color: CRIMSON, fontWeight: 800, textShadow: "0 0 10px rgba(255,92,108,0.5)" }}>{children}</span>;
+}
+function ResultGrid({ children }) {
+  return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: "9px", columnGap: "12px", borderTop: `1px dashed ${PANEL_LINE_BRIGHT}`, paddingTop: "11px", marginTop: "10px" }} className="text-sm">{children}</div>;
+}
+function SectionLabel({ children }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-2.5">
+      <span style={{ background: AMBER, width: "5px", height: "5px", boxShadow: `0 0 6px ${AMBER}` }} className="inline-block rounded-full flex-shrink-0" />
+      <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_HEAD, letterSpacing: "0.1em" }} className="text-[11px] uppercase">{children}</span>
+    </div>
+  );
+}
+function SubDivider() {
+  return <div style={{ borderTop: `1px dashed ${PANEL_LINE_BRIGHT}`, marginTop: "14px", paddingTop: "14px" }} />;
+}
+function ErrorText({ children }) {
+  return (
+    <div style={{ color: "#FFE3E6", background: CRIMSON_DEEP, borderLeft: `3px solid ${CRIMSON}`, fontFamily: FONT_MONO }} className="text-xs mt-3 px-3 py-2 rounded-r">
+      {children}
+    </div>
+  );
+}
+function ModeRow({ options, value, onChange }) {
+  return (
+    <div className="w-full max-w-md flex gap-1.5 flex-wrap justify-center">
+      {options.map(([id, label]) => {
+        const active = value === id;
+        return (
+          <button key={id} onClick={() => onChange(id)}
+            style={{
+              background: active ? "rgba(79,216,232,0.14)" : PANEL,
+              color: active ? AMBER : TEXT_MUTE,
+              border: `1px solid ${active ? AMBER : PANEL_LINE}`,
+              clipPath: CHAMFER_SM,
+              fontFamily: FONT_MONO, letterSpacing: "0.02em",
+              boxShadow: active ? `0 0 12px -3px rgba(79,216,232,0.6)` : "none",
+            }}
+            className="px-3 py-1.5 text-[11px] font-semibold uppercase">{label}</button>
+        );
+      })}
+    </div>
+  );
+}
+function ScaleRow({ scale, setScale, extra, note, showDistanceRemark }) {
+  const ydPerRing = scale * 1000;
+  const nmPerRing = ydPerRing / YARDS_PER_NM;
+  return (
+    <div className="w-full max-w-md flex items-center justify-center gap-1.5 flex-wrap">
+      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-widest mr-0.5">Scale</span>
+      {[2, 3, 4, 5].map((s) => {
+        const active = scale === s;
+        return (
+          <button key={s} onClick={() => setScale(s)}
+            style={{
+              background: active ? "rgba(255,92,108,0.16)" : PANEL,
+              color: active ? "#fff" : TEXT_MUTE,
+              border: `1px solid ${active ? CRIMSON : PANEL_LINE}`,
+              clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
+              boxShadow: active ? `0 0 10px -3px rgba(255,92,108,0.6)` : "none",
+            }}
+            className="px-3 py-1 text-[11px] font-bold">{s}:1</button>
+        );
+      })}
+      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9.5px]">({extra})</span>
+      {showDistanceRemark && (
+        <span style={{ color: CRIMSON, fontFamily: FONT_MONO, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM }} className="text-[10px] w-full text-center py-1 mt-0.5 font-bold">
+          ⚑ REMARK: 1 ช่อง (ring) = {ydPerRing.toLocaleString()} yds  (1:{ydPerRing.toLocaleString()}yds ≈ {nmPerRing.toFixed(2)} NM)
+        </span>
+      )}
+      {note && <span style={{ color: AMBER, fontFamily: FONT_MONO }} className="text-[9.5px] w-full text-center opacity-90">{note}</span>}
     </div>
   );
 }
 function ButtonRow({ onClear, onRandom, onSolve, solveLabel = "คำนวณ" }) {
   return (
     <div className="flex gap-2 mt-4">
-      <button onClick={onClear} style={{ background: "#EDEAE0", color: "#5C6A63" }} className="px-3 py-2.5 rounded-lg text-sm font-medium">ล้าง</button>
-      {onRandom && <button onClick={onRandom} style={{ background: "#3B5A6B", color: "#fff" }} className="flex-1 py-2.5 rounded-lg text-sm font-semibold">สุ่มโจทย์</button>}
-      <button onClick={onSolve} style={{ background: "#3F7A4C", color: "#fff" }} className="flex-1 py-2.5 rounded-lg text-sm font-semibold">{solveLabel}</button>
+      <button onClick={onClear}
+        style={{ background: "transparent", color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO }}
+        className="px-3.5 py-2.5 text-xs font-semibold uppercase">Clear</button>
+      {onRandom && (
+        <button onClick={onRandom}
+          style={{ background: "rgba(79,216,232,0.08)", color: TEXT_LIGHT, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER, fontFamily: FONT_MONO }}
+          className="flex-1 py-2.5 text-xs font-bold uppercase tracking-wide">สุ่มโจทย์</button>
+      )}
+      <button onClick={onSolve}
+        style={{ background: "linear-gradient(135deg, rgba(79,216,232,0.28), rgba(79,216,232,0.12))", color: "#EAFEFF", border: `1px solid ${AMBER}`, clipPath: CHAMFER, fontFamily: FONT_MONO, animation: "pulseGlow 2.6s ease-in-out infinite" }}
+        className="flex-1 py-2.5 text-xs font-bold uppercase tracking-wide">▶ {solveLabel}</button>
     </div>
   );
 }
 const rowGrid4 = { display: "grid", gridTemplateColumns: "34px 1fr 1fr 1fr", columnGap: "8px", alignItems: "center" };
 const rowGrid3 = { display: "grid", gridTemplateColumns: "34px 1fr 1fr", columnGap: "8px", alignItems: "center" };
-function MiniLabel({ children }) { return <div style={{ color: "#9AA5AC", fontSize: "9.5px", fontFamily: FONT_BODY }} className="uppercase tracking-wide text-center">{children}</div>; }
-function PointName({ children }) { return <div style={{ color: "#2B2B2B", fontFamily: FONT_MONO, fontWeight: 700 }} className="text-xs">{children}</div>; }
+function MiniLabel({ children }) { return <div style={{ color: TEXT_MUTE, fontSize: "9px", fontFamily: FONT_MONO }} className="uppercase tracking-wider text-center">{children}</div>; }
+function PointName({ children }) { return <div style={{ color: AMBER, fontFamily: FONT_MONO, fontWeight: 800, textShadow: `0 0 6px rgba(79,216,232,0.4)` }} className="text-xs">{children}</div>; }
 function PointRow({ label, v1, v2, v3, onC1, onC2, onC3, p1, p2, p3 }) {
   return (
     <div style={rowGrid4} className="mb-1.5">
@@ -709,22 +1056,23 @@ function TwoField({ l1, l2, v1, v2, onC1, onC2, p1, p2 }) {
 function Field({ value, onChange, placeholder }) {
   return (
     <input value={value} onChange={onChange} placeholder={placeholder} inputMode="numeric"
-      style={{ border: "1px solid #D8D2C0", borderRadius: "7px", padding: "8px 5px", fontFamily: FONT_MONO, color: "#2B2B2B", width: "100%", textAlign: "center", background: "#fff" }} />
+      style={{ border: `1px solid ${PANEL_LINE_BRIGHT}`, borderRadius: "3px", padding: "8px 5px", fontFamily: FONT_MONO, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "rgba(3,7,12,0.55)", transition: "box-shadow 0.15s ease" }} />
   );
 }
 function ResultItem({ label, value, accent, wide }) {
   if (wide) {
     return (
       <div style={{ gridColumn: "1 / span 2" }} className="flex flex-col items-center text-center gap-0.5 pt-1">
-        <span style={{ color: INK_SOFT }} className="text-xs">{label}</span>
-        <span style={{ color: accent ? CRIMSON : INK, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
+        <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wide">{label}</span>
+        <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
       </div>
     );
   }
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: INK_SOFT }} className="text-xs">{label}</span>
-      <span style={{ color: accent ? CRIMSON : INK, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
+      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wide">{label}</span>
+      <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
     </div>
   );
 }
+
