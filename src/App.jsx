@@ -8,7 +8,7 @@ const VB_W = 1650;
 const VB_H = 1275;
 const CENTER = { x: 850.9, y: 550.7 };
 const MAX_R_PX = 478;
-const RING_COUNT = 20;
+const RING_COUNT = 10;
 const PX_PER_RING = MAX_R_PX / RING_COUNT;
 const YARDS_PER_NM = 2025.3718;
 
@@ -28,9 +28,9 @@ const TEXT_LIGHT = "#E7F6FA";
 const TEXT_LIGHT_MUTE = "#84A6B2";
 const CARD = "#FCFBF6";
 
-const FONT_HEAD = "'Orbitron', 'Oswald', sans-serif";
-const FONT_BODY = "'IBM Plex Sans', sans-serif";
-const FONT_MONO = "'IBM Plex Mono', monospace";
+const FONT_HEAD = "'Chakra Petch', 'IBM Plex Sans Thai', sans-serif";
+const FONT_BODY = "'IBM Plex Sans Thai', sans-serif";
+const FONT_MONO = "'IBM Plex Mono', 'IBM Plex Sans Thai', monospace";
 
 // signature: chamfered (angle-cut) corners for interactive controls —
 // distinguishes actionable elements from soft-cornered content cards
@@ -49,10 +49,12 @@ function minutesToHHMM(totalMin) {
   return String(h).padStart(2, "0") + String(mm).padStart(2, "0");
 }
 function hhmmToMinutes(hhmm) {
-  const s = String(hhmm).padStart(4, "0");
+  const raw = String(hhmm).trim();
+  if (!/^\d{3,4}$/.test(raw)) return NaN;
+  const s = raw.padStart(4, "0");
   const h = parseInt(s.slice(0, 2), 10);
   const m = parseInt(s.slice(2, 4), 10);
-  if (Number.isNaN(h) || Number.isNaN(m)) return NaN;
+  if (Number.isNaN(h) || Number.isNaN(m) || h > 23 || m > 59) return NaN;
   return h * 60 + m;
 }
 function valueToPx(realValue, scale) { return (realValue / scale) * PX_PER_RING; }
@@ -93,12 +95,12 @@ const IMG_DATA = boardImg;
    ============================================================ */
 function BoardChrome({ children }) {
   return (
-    <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full h-full select-none" style={{ display: "block" }}>
+    <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full select-none" style={{ display: "block", aspectRatio: `${VB_W} / ${VB_H}` }}>
       <defs>
         <clipPath id="boardClip"><circle cx={CENTER.x} cy={CENTER.y} r={MAX_R_PX} /></clipPath>
-        <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={AMBER_DEEP} /></marker>
-        <marker id="arrowCrimson" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={CRIMSON} /></marker>
-        <marker id="arrowInk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={INK} /></marker>
+        <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={AMBER_DEEP} /></marker>
+        <marker id="arrowCrimson" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={CRIMSON} /></marker>
+        <marker id="arrowInk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={INK} /></marker>
       </defs>
       <image href={IMG_DATA} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid slice" />
       <g clipPath="url(#boardClip)">{children}</g>
@@ -235,18 +237,18 @@ function TargetSpeedTab() {
 
   const boardVectors = result && (
     <g>
-      {rmlSeg && (() => { const a = scD(rmlSeg.a), b = scD(rmlSeg.b); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="2.2" strokeDasharray="9 7" opacity="0.75" />; })()}
-      {(() => { const cp = scD(result.cpaPoint); return <line x1={CENTER.x} y1={CENTER.y} x2={cp.sx} y2={cp.sy} stroke={INK} strokeWidth="1.6" strokeDasharray="3 5" opacity="0.6" />; })()}
-      {(() => { const cp = scD(result.cpaPoint); return <circle cx={cp.sx} cy={cp.sy} r="8" fill="none" stroke={INK} strokeWidth="2.4" />; })()}
+      {rmlSeg && (() => { const a = scD(rmlSeg.a), b = scD(rmlSeg.b); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="1.2" strokeDasharray="7 6" opacity="0.75" />; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <line x1={CENTER.x} y1={CENTER.y} x2={cp.sx} y2={cp.sy} stroke={INK} strokeWidth="1" strokeDasharray="3 5" opacity="0.6" />; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <circle cx={cp.sx} cy={cp.sy} r="6" fill="none" stroke={INK} strokeWidth="1.4" />; })()}
       {(() => { const cp = scD(result.cpaPoint); return <text x={cp.sx} y={cp.sy - 14} fontSize="18" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">M3</text>; })()}
-      {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
+      {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P1); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M1</text>; })()}
-      {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
+      {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P2); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M2</text>; })()}
-      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="2.8" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="4.2" markerEnd="url(#arrowAmber)" />; })()}
+      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
       {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="4.2" markerEnd="url(#arrowCrimson)" />; })()}
+      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
       {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">em</text>; })()}
     </g>
   );
@@ -355,10 +357,10 @@ function WindTab() {
   const sc = (xy) => xyToScreenSpeedScaled(xy.x, xy.y, scale);
   const boardVectors = result && (
     <g>
-      {(() => { const a = sc(result.er), b = sc(result.awTip); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="2.8" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="4.2" markerEnd="url(#arrowAmber)" />; })()}
+      {(() => { const a = sc(result.er), b = sc(result.awTip); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
       {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.ew); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="4.2" markerEnd="url(#arrowCrimson)" />; })()}
+      {(() => { const a = sc(result.ew); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
       {(() => { const a = sc(result.ew); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">ew</text>; })()}
     </g>
   );
@@ -376,7 +378,7 @@ function WindTab() {
         {result && result.mode === "desired" && (
           <>
             <BigAnswer>เดินเข็ม <Accent>{fmtBrg(result.Co)}</Accent> ความเร็ว <Accent>{fmt(result.So)} นอต</Accent></BigAnswer>
-            <div style={{ color: "#5C8A6E" }} className="text-[11px] text-center mt-1">
+            <div style={{ color: "#78A48A", fontFamily: FONT_BODY }} className="text-[13px] text-center mt-1 leading-relaxed">
               ตรวจคำตอบ: ที่เข็ม/ความเร็วนี้ ลมข้ามดาดฟ้าจะมาจาก {fmtBrg(result.checkRelFrom)} (สัมพัทธ์) ความเร็ว {fmt(result.checkRelSpeed)} kt
             </div>
             {result.altSo && <div style={{ color: INK_SOFT }} className="text-xs text-center mt-1">(อีกคำตอบที่เป็นไปได้: {fmt(result.altSo)} นอต ที่เข็มอื่น — ระบบเลือกความเร็วต่ำกว่าให้)</div>}
@@ -393,7 +395,7 @@ function WindTab() {
             <SubDivider />
             <SectionLabel>ลมที่วัดได้บนดาดฟ้า (Relative Wind)</SectionLabel>
             <TwoField l1="ทิศลมพัดมาจาก (สัมพัทธ์)" l2="ความเร็ว" v1={rw.from} v2={rw.speed} onC1={(e) => setRw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setRw((p) => ({ ...p, speed: e.target.value }))} p1="°rel" p2="kt" />
-            <div style={{ color: INK_SOFT }} className="text-[10px] mt-1">วัดตามเข็มนาฬิกาจากหัวเรือ: 000° = ลมมาตรงหัวเรือ, 090° = มาทางกราบขวา, 180° = มาทางท้ายเรือ</div>
+            <div style={{ color: INK_SOFT, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">วัดตามเข็มนาฬิกาจากหัวเรือ: 000° = ลมมาตรงหัวเรือ, 090° = มาทางกราบขวา, 180° = มาทางท้ายเรือ</div>
             <ButtonRow onClear={clearAll} onSolve={solveTrueWind} solveLabel="หา True Wind" />
           </>
         ) : (
@@ -403,7 +405,7 @@ function WindTab() {
             <SubDivider />
             <SectionLabel>ลมข้ามดาดฟ้าที่ต้องการ (Desired Relative Wind)</SectionLabel>
             <TwoField l1="ทิศที่ต้องการให้ลมมา (สัมพัทธ์)" l2="ความเร็วที่ต้องการ" v1={desired.from} v2={desired.speed} onC1={(e) => setDesired((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setDesired((p) => ({ ...p, speed: e.target.value }))} p1="°rel เช่น 000" p2="kt" />
-            <div style={{ color: INK_SOFT }} className="text-[10px] mt-1">ปกติการรับ ฮ. ต้องการลมมาตรงหัวเรือหรือใกล้เคียง → ใส่ 000° (เรือจะวิ่งทวนลมโดยประมาณ)</div>
+            <div style={{ color: INK_SOFT, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">ปกติการรับ ฮ. ต้องการลมมาตรงหัวเรือหรือใกล้เคียง → ใส่ 000° (เรือจะวิ่งทวนลมโดยประมาณ)</div>
             <ButtonRow onClear={clearAll} onSolve={solveDesired} solveLabel="หาเข็ม/ความเร็ว" />
           </>
         )}
@@ -514,15 +516,15 @@ function StationTab() {
   const centerLabel = centerMode === "ownship" ? "เรือเรา" : "GUIDE";
   const boardVectors = result && (
     <g>
-      {(() => { const a = scD(result.P1), b = scD(result.P2); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="2.2" strokeDasharray="9 7" opacity="0.75" />; })()}
-      {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
+      {(() => { const a = scD(result.P1), b = scD(result.P2); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="1.2" strokeDasharray="7 6" opacity="0.75" />; })()}
+      {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P1); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M1</text>; })()}
-      {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="10" fill={CRIMSON} stroke={PAPER} strokeWidth="2.5" />; })()}
+      {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P2); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M2</text>; })()}
-      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="2.8" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="4.2" markerEnd="url(#arrowAmber)" />; })()}
+      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
       {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="4.2" markerEnd="url(#arrowCrimson)" />; })()}
+      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
       {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">em</text>; })()}
       <text x={CENTER.x} y={CENTER.y + 26} fontSize="13" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">{centerLabel}</text>
     </g>
@@ -740,7 +742,7 @@ function TSDTab() {
       <GlassPanel>
         <SectionLabel>เส้นมาร์คบนสเกล (เหมือนขีดด้วยดินสอ)</SectionLabel>
         <NomogramGraphic T={result ? result.T : NaN} S={result ? result.S : NaN} Dyd={result ? result.Dyd : NaN} />
-        {!result && <div style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] text-center mt-1">คำนวณก่อนเพื่อดูเส้นมาร์ค</div>}
+        {!result && <div style={{ color: TEXT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] text-center mt-1">คำนวณก่อนเพื่อดูเส้นมาร์ค</div>}
       </GlassPanel>
 
       <InputCard>
@@ -772,11 +774,11 @@ function TSDTab() {
                         border: `1px solid ${distUnit === u ? AMBER : PANEL_LINE}`,
                         clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
                       }}
-                      className="px-2.5 text-[10px] font-bold uppercase">{u}</button>
+                      className="px-2.5 text-[12px] font-medium uppercase">{u}</button>
                   ))}
                 </div>
               </div>
-              <div style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9px] mt-1">{UNIT_LABEL[distUnit]}</div>
+              <div style={{ color: TEXT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] mt-1">{UNIT_LABEL[distUnit]}</div>
             </div>
           )}
         </div>
@@ -813,26 +815,30 @@ export default function App() {
   ];
   return (
     <div style={{ background: BG, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&family=Oswald:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500&display=swap');
         ::placeholder { color: #B7BEC3; opacity: 1; }
+        body { font-weight: 400; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
         button { transition: opacity 0.15s ease, transform 0.1s ease, background 0.15s ease; }
         button:active { transform: scale(0.96); }
+        button:focus-visible, input:focus-visible { outline: 2px solid ${AMBER}; outline-offset: 2px; }
+        button:disabled { cursor: not-allowed; opacity: 0.5; }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
         input { font-size: 16px !important; }
       `}</style>
 
       <div className="w-full max-w-md flex items-center justify-between px-4 pt-4 pb-1">
         <div className="flex items-center gap-2">
           <span style={{ background: AMBER, boxShadow: `0 0 8px ${AMBER}` }} className="w-1.5 h-1.5 rounded-full inline-block" />
-          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.16em", color: TEXT_LIGHT, textShadow: `0 0 10px rgba(79,216,232,0.4)` }} className="text-[13px] uppercase">MB · Solver</span>
+          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.13em", color: TEXT_LIGHT, fontWeight: 500 }} className="text-[15px] uppercase">MB · Solver</span>
         </div>
-        <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9px] uppercase tracking-widest">Pub.1310 Ref</span>
+        <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_MONO }} className="text-[11px] uppercase tracking-wider">Pub.1310 Ref</span>
       </div>
 
       <div className="w-full max-w-md flex gap-1 px-4">
         {tabs.map(([id, label]) => {
           const active = tab === id;
           return (
-            <button key={id} onClick={() => setTab(id)}
+            <button key={id} onClick={() => setTab(id)} aria-pressed={active} aria-label={`เปิดเครื่องมือ ${label}`}
               style={{
                 background: active ? "rgba(79,216,232,0.08)" : "transparent",
                 color: active ? TEXT_LIGHT : TEXT_MUTE,
@@ -842,7 +848,7 @@ export default function App() {
                 borderBottom: `2px solid ${active ? AMBER : "transparent"}`,
                 boxShadow: active ? `0 -2px 16px -6px rgba(79,216,232,0.5)` : "none",
               }}
-              className="flex-1 flex flex-col items-center gap-1 text-[10px] px-2 pt-2.5 pb-2 rounded-t-md font-semibold uppercase tracking-wide">
+              className="flex-1 flex flex-col items-center gap-1 text-[12px] px-2 pt-3 pb-2.5 rounded-t-md font-normal tracking-wide">
               <TabIcon id={id} active={active} />
               {label}
             </button>
@@ -902,7 +908,7 @@ function BoardCard({ children, zOpen }) {
       <div style={{ background: PAPER, borderRadius: "3px", boxShadow: `0 0 26px -8px rgba(79,216,232,0.4)` }} className="p-2 relative">
         <button onClick={zOpen}
           style={{ background: "rgba(5,9,16,0.85)", color: AMBER, border: `1px solid ${AMBER}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, letterSpacing: "0.04em", boxShadow: "0 0 10px -2px rgba(79,216,232,0.6)" }}
-          className="absolute top-3 right-3 z-10 text-[10px] px-3 py-1.5 font-semibold uppercase">⤢ Zoom</button>
+          className="absolute top-3 right-3 z-10 text-[11px] px-3 py-2 font-normal uppercase">⤢ Zoom</button>
         {children}
       </div>
     </div>
@@ -921,7 +927,7 @@ function InputCard({ children }) {
 }
 function EmptyNote() {
   return (
-    <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_MONO }} className="text-xs text-center py-2 uppercase tracking-wide">
+    <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-sm text-center py-2 tracking-wide">
       — กรอกข้อมูลด้านล่างแล้วกด "คำนวณ" —
     </div>
   );
@@ -929,13 +935,13 @@ function EmptyNote() {
 function BigAnswer({ children }) {
   return (
     <div>
-      <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.22em" }} className="text-[10px] uppercase text-center mb-1.5">◆ Output</div>
-      <div style={{ color: TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700, textShadow: "0 0 14px rgba(79,216,232,0.25)" }} className="text-[15px] text-center mb-1 leading-relaxed">{children}</div>
+      <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.16em", fontWeight: 400 }} className="text-[12px] uppercase text-center mb-2">◆ Output</div>
+      <div style={{ color: TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 500 }} className="text-[17px] text-center mb-1 leading-relaxed">{children}</div>
     </div>
   );
 }
 function Accent({ children }) {
-  return <span style={{ color: CRIMSON, fontWeight: 800, textShadow: "0 0 10px rgba(255,92,108,0.5)" }}>{children}</span>;
+  return <span style={{ color: CRIMSON, fontWeight: 600 }}>{children}</span>;
 }
 function ResultGrid({ children }) {
   return <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: "9px", columnGap: "12px", borderTop: `1px dashed ${PANEL_LINE_BRIGHT}`, paddingTop: "11px", marginTop: "10px" }} className="text-sm">{children}</div>;
@@ -944,7 +950,7 @@ function SectionLabel({ children }) {
   return (
     <div className="flex items-center gap-1.5 mb-2.5">
       <span style={{ background: AMBER, width: "5px", height: "5px", boxShadow: `0 0 6px ${AMBER}` }} className="inline-block rounded-full flex-shrink-0" />
-      <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_HEAD, letterSpacing: "0.1em" }} className="text-[11px] uppercase">{children}</span>
+      <span style={{ color: TEXT_LIGHT, fontFamily: FONT_HEAD, fontWeight: 400, letterSpacing: "0.06em" }} className="text-[13px]">{children}</span>
     </div>
   );
 }
@@ -973,7 +979,7 @@ function ModeRow({ options, value, onChange }) {
               fontFamily: FONT_MONO, letterSpacing: "0.02em",
               boxShadow: active ? `0 0 12px -3px rgba(79,216,232,0.6)` : "none",
             }}
-            className="px-3 py-1.5 text-[11px] font-semibold uppercase">{label}</button>
+            className="px-3 py-2 text-[12px] font-normal">{label}</button>
         );
       })}
     </div>
@@ -984,7 +990,7 @@ function ScaleRow({ scale, setScale, extra, note, showDistanceRemark }) {
   const nmPerRing = ydPerRing / YARDS_PER_NM;
   return (
     <div className="w-full max-w-md flex items-center justify-center gap-1.5 flex-wrap">
-      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-widest mr-0.5">Scale</span>
+      <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_HEAD }} className="text-[12px] uppercase tracking-wider mr-0.5">Scale</span>
       {[2, 3, 4, 5].map((s) => {
         const active = scale === s;
         return (
@@ -996,16 +1002,16 @@ function ScaleRow({ scale, setScale, extra, note, showDistanceRemark }) {
               clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
               boxShadow: active ? `0 0 10px -3px rgba(255,92,108,0.6)` : "none",
             }}
-            className="px-3 py-1 text-[11px] font-bold">{s}:1</button>
+            className="px-3 py-1.5 text-[12px] font-medium">{s}:1</button>
         );
       })}
-      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[9.5px]">({extra})</span>
+      <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px]">({extra})</span>
       {showDistanceRemark && (
-        <span style={{ color: CRIMSON, fontFamily: FONT_MONO, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM }} className="text-[10px] w-full text-center py-1 mt-0.5 font-bold">
+        <span style={{ color: CRIMSON, fontFamily: FONT_BODY, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM }} className="text-[12px] w-full text-center py-1.5 mt-0.5 font-normal">
           ⚑ REMARK: 1 ช่อง (ring) = {ydPerRing.toLocaleString()} yds  (1:{ydPerRing.toLocaleString()}yds ≈ {nmPerRing.toFixed(2)} NM)
         </span>
       )}
-      {note && <span style={{ color: AMBER, fontFamily: FONT_MONO }} className="text-[9.5px] w-full text-center opacity-90">{note}</span>}
+      {note && <span style={{ color: AMBER, fontFamily: FONT_BODY }} className="text-[12px] w-full text-center opacity-90">{note}</span>}
     </div>
   );
 }
@@ -1014,22 +1020,22 @@ function ButtonRow({ onClear, onRandom, onSolve, solveLabel = "คำนวณ" 
     <div className="flex gap-2 mt-4">
       <button onClick={onClear}
         style={{ background: "transparent", color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO }}
-        className="px-3.5 py-2.5 text-xs font-semibold uppercase">Clear</button>
+        className="px-3.5 py-3 text-sm font-normal uppercase">Clear</button>
       {onRandom && (
         <button onClick={onRandom}
           style={{ background: "rgba(79,216,232,0.08)", color: TEXT_LIGHT, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER, fontFamily: FONT_MONO }}
-          className="flex-1 py-2.5 text-xs font-bold uppercase tracking-wide">สุ่มโจทย์</button>
+          className="flex-1 py-3 text-sm font-normal tracking-wide">สุ่มโจทย์</button>
       )}
       <button onClick={onSolve}
         style={{ background: "linear-gradient(135deg, rgba(79,216,232,0.28), rgba(79,216,232,0.12))", color: "#EAFEFF", border: `1px solid ${AMBER}`, clipPath: CHAMFER, fontFamily: FONT_MONO, animation: "pulseGlow 2.6s ease-in-out infinite" }}
-        className="flex-1 py-2.5 text-xs font-bold uppercase tracking-wide">▶ {solveLabel}</button>
+        className="flex-1 py-3 text-sm font-medium tracking-wide">▶ {solveLabel}</button>
     </div>
   );
 }
 const rowGrid4 = { display: "grid", gridTemplateColumns: "34px 1fr 1fr 1fr", columnGap: "8px", alignItems: "center" };
 const rowGrid3 = { display: "grid", gridTemplateColumns: "34px 1fr 1fr", columnGap: "8px", alignItems: "center" };
-function MiniLabel({ children }) { return <div style={{ color: TEXT_MUTE, fontSize: "9px", fontFamily: FONT_MONO }} className="uppercase tracking-wider text-center">{children}</div>; }
-function PointName({ children }) { return <div style={{ color: AMBER, fontFamily: FONT_MONO, fontWeight: 800, textShadow: `0 0 6px rgba(79,216,232,0.4)` }} className="text-xs">{children}</div>; }
+function MiniLabel({ children }) { return <div style={{ color: TEXT_LIGHT_MUTE, fontSize: "12px", fontFamily: FONT_BODY, fontWeight: 400 }} className="tracking-wide text-center">{children}</div>; }
+function PointName({ children }) { return <div style={{ color: AMBER, fontFamily: FONT_MONO, fontWeight: 600 }} className="text-sm">{children}</div>; }
 function PointRow({ label, v1, v2, v3, onC1, onC2, onC3, p1, p2, p3 }) {
   return (
     <div style={rowGrid4} className="mb-1.5">
@@ -1056,23 +1062,22 @@ function TwoField({ l1, l2, v1, v2, onC1, onC2, p1, p2 }) {
 function Field({ value, onChange, placeholder }) {
   return (
     <input value={value} onChange={onChange} placeholder={placeholder} inputMode="numeric"
-      style={{ border: `1px solid ${PANEL_LINE_BRIGHT}`, borderRadius: "3px", padding: "8px 5px", fontFamily: FONT_MONO, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "rgba(3,7,12,0.55)", transition: "box-shadow 0.15s ease" }} />
+      style={{ border: `1px solid ${PANEL_LINE_BRIGHT}`, borderRadius: "4px", padding: "11px 7px", fontFamily: FONT_MONO, fontWeight: 400, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "rgba(3,7,12,0.7)", transition: "box-shadow 0.15s ease" }} />
   );
 }
 function ResultItem({ label, value, accent, wide }) {
   if (wide) {
     return (
       <div style={{ gridColumn: "1 / span 2" }} className="flex flex-col items-center text-center gap-0.5 pt-1">
-        <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wide">{label}</span>
-        <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
+        <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] tracking-wide">{label}</span>
+        <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 500 }} className="text-[15px]">{value}</span>
       </div>
     );
   }
   return (
     <div className="flex items-center justify-between">
-      <span style={{ color: TEXT_MUTE, fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wide">{label}</span>
-      <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 700 }} className="text-sm">{value}</span>
+      <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] tracking-wide">{label}</span>
+      <span style={{ color: accent ? CRIMSON : TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 500 }} className="text-[15px]">{value}</span>
     </div>
   );
 }
-

@@ -1,54 +1,83 @@
-# Maneuvering Board Solver
+# MB Solver
 
-โปรแกรมหาเข็ม/ความเร็วจริงของเรือเป้า พร้อม CPA/TCPA บนกระดานหนจริง (ภาพสแกนจริง ไม่ใช่ภาพวาด)
-เวกเตอร์คำนวณ ณ พิกัดที่ปรับเทียบ (calibrate) กับศูนย์กลางและวงนอกสุดของภาพจริงแล้ว
+เครื่องคำนวณ Maneuvering Board ภาษาไทยสำหรับงานเดินเรือ สร้างด้วย React, Vite และ Tailwind CSS
 
-## รันเครื่องตัวเอง
+## ความสามารถ
+
+- คำนวณเข็มและความเร็วเป้า พร้อม CPA/TCPA
+- คำนวณลมจริงและลมสัมพัทธ์
+- คำนวณการเข้าสถานี
+- คำนวณ Time–Speed–Distance
+- ใช้ภาพ Maneuvering Board ต้นฉบับเป็นพื้นหลังที่คาลิเบรตแล้ว
+- แสดงเวกเตอร์บนกระดานด้วย SVG
+- รองรับหน้าจอมือถือและการซูม/เลื่อนกระดาน
+
+## ความต้องการ
+
+- Node.js 20 ขึ้นไป (แนะนำ Node.js 22)
+- npm 10 ขึ้นไป
+
+## เริ่มใช้งาน
 
 ```bash
 npm install
 npm run dev
 ```
-เปิด http://localhost:5173
 
-## Build สำหรับ deploy
+เปิด URL ที่แสดงใน Terminal
+
+## ตรวจสอบและสร้าง Production Build
 
 ```bash
+npm run lint
 npm run build
-npm run preview   # ทดสอบไฟล์ build ก่อนขึ้นจริง
+npm run preview
 ```
-ไฟล์ build อยู่ที่ `dist/` เอาไป host ที่ไหนก็ได้ (GitHub Pages, Vercel, Netlify)
 
-## Push ขึ้น GitHub (repo ใหม่)
+ไฟล์สำหรับเผยแพร่จะอยู่ใน `dist/`
+
+## อัปโหลดขึ้น GitHub
+
+1. สร้าง repository ใหม่บน GitHub โดยไม่ต้องเพิ่ม README หรือ `.gitignore`
+2. แตกไฟล์ ZIP นี้
+3. เปิด Terminal ในโฟลเดอร์โปรเจกต์แล้วรัน:
 
 ```bash
 git init
 git add .
-git commit -m "Initial commit: maneuvering board solver"
+git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/SORN7749/<ชื่อ-repo>.git
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
 git push -u origin main
 ```
 
-## Deploy อัตโนมัติด้วย GitHub Actions (ไม่ต้องมีคอมพ์เลย)
+เปลี่ยน `YOUR_USERNAME` และ `YOUR_REPOSITORY` ให้ตรงกับ repository ของคุณ
 
-โปรเจกต์นี้ตั้งค่าให้พร้อมสำหรับ repo **https://github.com/SORN7749/mo-board** แล้ว (`vite.config.js` ตั้ง `base: "/mo-board/"` ไว้ให้)
+## เปิดใช้งาน GitHub Pages
 
-1. **Push โค้ดทั้งหมด** (รวมโฟลเดอร์ `.github`) ขึ้น repo `SORN7749/mo-board` บน branch `main`
+โปรเจกต์มี GitHub Actions สำหรับ build และ deploy ให้อัตโนมัติแล้ว
 
-2. **เปิดใช้งาน Pages ให้ build จาก Actions**
-   ไปที่ repo บนเว็บ → **Settings → Pages** → "Build and deployment" → **Source** เลือก **"GitHub Actions"**
+1. ไปที่ `Settings → Pages`
+2. เลือก Source เป็น `GitHub Actions`
+3. Push โค้ดเข้า branch `main`
+4. ตรวจสถานะที่แท็บ `Actions`
 
-3. **เสร็จแล้ว** — ทุกครั้งที่ push เข้า `main`, GitHub build+deploy ให้อัตโนมัติ
-   ดูสถานะที่แท็บ **Actions** (รอบแรก ~1-2 นาที)
-   เว็บจะอยู่ที่ **https://SORN7749.github.io/mo-board/**
+เมื่อ workflow สำเร็จ เว็บไซต์จะเปิดผ่าน GitHub Pages ได้ทันที
 
-## หมายเหตุการ Calibrate
+## โครงสร้างหลัก
 
-ภาพกระดาน (`src/assets/maneuvering-board.jpg`) สแกนจาก PDF จริง แล้วตรวจจับศูนย์กลาง + รัศมีวงนอกสุด
-ด้วยโค้ด (radial darkness profile) เพื่อความแม่นยำ ค่าที่ได้ (ปรับใน `src/App.jsx`):
-- CENTER = { x: 850.9, y: 550.7 }
-- MAX_R_PX = 478 (พิกัดในภาพขนาด 1650×1275)
-- RING_COUNT = 20 วง (ยืนยันจากสเกล 2:1 ที่วงนอกสุด = 40 → 40/2 = 20)
+```text
+src/
+  assets/maneuvering-board.jpg
+  App.jsx
+  index.css
+  main.jsx
+.github/workflows/deploy-pages.yml
+index.html
+package.json
+vite.config.js
+```
 
-ถ้าเปลี่ยนภาพกระดานเป็นไฟล์อื่น ต้องปรับ 3 ค่านี้ใหม่ให้ตรงกับภาพนั้น
+## หมายเหตุ
+
+แอปนี้เป็นเครื่องมือช่วยคำนวณเพื่อการฝึกและตรวจสอบ ควรยืนยันผลด้วยหลักการเดินเรือและเอกสารทางการก่อนใช้งานจริง
