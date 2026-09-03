@@ -205,10 +205,47 @@ function useZoomPan() {
   return { zoomed, zScale, zX, zY, open, close, onTouchStart, onTouchMove, onTouchEnd, onWheel };
 }
 
+function useMobilePageGuards() {
+  useEffect(() => {
+    let startY = 0;
+    const isBoardZoom = (target) => target instanceof Element && Boolean(target.closest("[data-board-zoom='true']"));
+    const onTouchStart = (event) => {
+      if (event.touches.length === 1) startY = event.touches[0].clientY;
+    };
+    const onTouchMove = (event) => {
+      if (isBoardZoom(event.target)) return;
+      if (event.touches.length > 1) {
+        event.preventDefault();
+        return;
+      }
+      if (event.touches.length !== 1) return;
+      const page = document.scrollingElement || document.documentElement;
+      const deltaY = event.touches[0].clientY - startY;
+      const maxScroll = Math.max(0, page.scrollHeight - window.innerHeight);
+      const atTop = page.scrollTop <= 0;
+      const atBottom = page.scrollTop >= maxScroll - 1;
+      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) event.preventDefault();
+    };
+    const onGesture = (event) => {
+      if (!isBoardZoom(event.target)) event.preventDefault();
+    };
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("gesturestart", onGesture, { passive: false });
+    document.addEventListener("gesturechange", onGesture, { passive: false });
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("gesturestart", onGesture);
+      document.removeEventListener("gesturechange", onGesture);
+    };
+  }, []);
+}
+
 function ZoomModal({ z, children, stepControls }) {
   if (!z.zoomed) return null;
   return (
-    <div style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
+    <div data-board-zoom="true" style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
       <div className="flex items-center px-4 py-3 pr-16" style={{ background: BG, borderBottom: `1px solid ${PANEL_LINE}` }}>
         <span style={{ color: AMBER, fontFamily: FONT_MONO, textShadow: `0 0 8px rgba(79,216,232,0.5)` }} className="text-[10px] uppercase tracking-wide">⇕ Pinch / drag to pan &amp; zoom</span>
         <button onClick={z.close}
@@ -995,6 +1032,7 @@ function TabIcon({ id, active }) {
 }
 export default function App() {
   const [tab, setTab] = useState("target");
+  useMobilePageGuards();
   const tabs = [
     ["target", "TMA"],
     ["wind", "ปัญหาลม"],
