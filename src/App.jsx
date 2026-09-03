@@ -12,18 +12,23 @@ const RING_COUNT = 10;
 const PX_PER_RING = MAX_R_PX / RING_COUNT;
 const YARDS_PER_NM = 2025.3718;
 
-const PAPER = "#F5F1E4";
-const INK = "#1E3A32";
-const INK_SOFT = "#63766C";
+const PAPER = "#07111B";
+const INK = "#72DDE8";
+const INK_SOFT = "#7695A2";
 const CRIMSON = "#FF5C6C";
 const CRIMSON_DEEP = "#5C1F28";
+const ER_BLUE = "#155EEF";
+const ER_BLUE_DEEP = "#0B3FAF";
+const RM_BLUE = ER_BLUE;
+const EM_RED = "#C61F3D";
+const PERP_BLUE = "#164E7A";
 const AMBER_DEEP = "#1B6E7D";
 const AMBER = "#4FD8E8";
-const BG = "#050910";
-const PANEL = "rgba(14,24,36,0.66)";
-const PANEL_LINE = "rgba(79,216,232,0.25)";
-const PANEL_LINE_BRIGHT = "rgba(79,216,232,0.6)";
-const TEXT_MUTE = "#6E8B96";
+const BG = "#020A13";
+const PANEL = "rgba(7,18,29,0.92)";
+const PANEL_LINE = "rgba(111,176,193,0.30)";
+const PANEL_LINE_BRIGHT = "rgba(79,216,232,0.72)";
+const TEXT_MUTE = "#76939F";
 const TEXT_LIGHT = "#E7F6FA";
 const TEXT_LIGHT_MUTE = "#84A6B2";
 const CARD = "#FCFBF6";
@@ -34,8 +39,8 @@ const FONT_MONO = "'IBM Plex Mono', 'IBM Plex Sans Thai', monospace";
 
 // signature: chamfered (angle-cut) corners for interactive controls —
 // distinguishes actionable elements from soft-cornered content cards
-const CHAMFER = "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)";
-const CHAMFER_SM = "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)";
+const CHAMFER = "none";
+const CHAMFER_SM = "none";
 
 const toRad = (d) => (d * Math.PI) / 180;
 const toDeg = (r) => (r * 180) / Math.PI;
@@ -74,19 +79,31 @@ function xyToScreenDistanceScaled(xNm, yNm, scale) {
   const rangeThousandYd = (rangeNm * YARDS_PER_NM) / 1000;
   return polarValueToScreen(bearing, rangeThousandYd, scale);
 }
-function idealScaleForRangeYards(maxYards) {
+function idealScaleForRangeYards(maxYards, minScale = 1) {
   const thousandYd = maxYards / 1000;
-  for (const s of [2, 3, 4, 5]) if (thousandYd / s <= RING_COUNT) return s;
+  for (const s of [1, 2, 3, 4, 5]) if (s >= minScale && thousandYd / s <= RING_COUNT) return s;
   return 5;
 }
-function idealScaleForSpeed(maxKt) {
-  for (const s of [2, 3, 4, 5]) if (maxKt / s <= RING_COUNT) return s;
+function idealScaleForSpeed(maxKt, minScale = 1) {
+  for (const s of [1, 2, 3, 4, 5]) if (s >= minScale && maxKt / s <= RING_COUNT) return s;
   return 5;
 }
 function vAdd(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
 function vSub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
 function vLen(a) { return Math.hypot(a.x, a.y); }
 function vBrg(a) { return mod360(toDeg(Math.atan2(a.x, a.y))); }
+function relativeFromBearing(side, angle) {
+  const a = Math.min(180, Math.max(0, Number(angle)));
+  return side === "port" ? mod360(360 - a) : a;
+}
+function bearingToRelativeSide(bearing) {
+  const b = mod360(bearing);
+  return b > 180 ? { side: "port", angle: 360 - b } : { side: "starboard", angle: b };
+}
+function fmtRelative(side, angle) {
+  const sideText = side === "port" ? "กราบซ้าย" : "กราบขวา";
+  return `${String(Math.round(angle)).padStart(3, "0")}° จากหัวเรือ${sideText}`;
+}
 
 const IMG_DATA = boardImg;
 
@@ -94,15 +111,26 @@ const IMG_DATA = boardImg;
    BOARD — real photo background, vectors overlaid & calibrated
    ============================================================ */
 function BoardChrome({ children }) {
+  // A little more of the original sheet stays visible so the full
+  // MANEUVERING BOARD heading and the outer plotting border are retained.
+  const boardViewSize = (MAX_R_PX + 60) * 2;
+  const boardViewX = CENTER.x - boardViewSize / 2;
+  const boardViewY = CENTER.y - boardViewSize / 2;
   return (
-    <svg viewBox={`0 0 ${VB_W} ${VB_H}`} className="w-full select-none" style={{ display: "block", aspectRatio: `${VB_W} / ${VB_H}` }}>
+    <svg viewBox={`${boardViewX} ${boardViewY} ${boardViewSize} ${boardViewSize}`} className="w-full select-none" style={{ display: "block", aspectRatio: "1 / 1", background: "#020A13" }}>
       <defs>
         <clipPath id="boardClip"><circle cx={CENTER.x} cy={CENTER.y} r={MAX_R_PX} /></clipPath>
+        <radialGradient id="boardGlow"><stop offset="0" stopColor="#092234" /><stop offset="1" stopColor="#020A13" /></radialGradient>
         <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={AMBER_DEEP} /></marker>
         <marker id="arrowCrimson" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={CRIMSON} /></marker>
         <marker id="arrowInk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={INK} /></marker>
+        <marker id="arrowEr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={ER_BLUE} /></marker>
+        <marker id="arrowRm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={RM_BLUE} /></marker>
+        <marker id="arrowEm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={EM_RED} /></marker>
       </defs>
-      <image href={IMG_DATA} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid slice" />
+      <rect x={boardViewX} y={boardViewY} width={boardViewSize} height={boardViewSize} fill="url(#boardGlow)" />
+      <image href={IMG_DATA} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid slice" style={{ filter: "invert(1) sepia(1) saturate(2.2) hue-rotate(133deg) brightness(0.64) contrast(1.18)", opacity: 0.78 }} />
+      <circle cx={CENTER.x} cy={CENTER.y} r={MAX_R_PX} fill="none" stroke={AMBER} strokeWidth="1.2" opacity="0.8" />
       <g clipPath="url(#boardClip)">{children}</g>
     </svg>
   );
@@ -148,11 +176,12 @@ function ZoomModal({ z, children }) {
   if (!z.zoomed) return null;
   return (
     <div style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
-      <div className="flex justify-between items-center px-4 py-3" style={{ background: BG, borderBottom: `1px solid ${PANEL_LINE}` }}>
+      <div className="flex items-center px-4 py-3 pr-16" style={{ background: BG, borderBottom: `1px solid ${PANEL_LINE}` }}>
         <span style={{ color: AMBER, fontFamily: FONT_MONO, textShadow: `0 0 8px rgba(79,216,232,0.5)` }} className="text-[10px] uppercase tracking-wide">⇕ Pinch / drag to pan &amp; zoom</span>
         <button onClick={z.close}
-          style={{ background: "transparent", color: CRIMSON, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, boxShadow: `0 0 10px -2px rgba(255,92,108,0.6)` }}
-          className="w-9 h-9 font-bold flex items-center justify-center">✕</button>
+          aria-label="ปิดการซูม"
+          style={{ position: "fixed", top: "max(12px, env(safe-area-inset-top))", right: "max(12px, env(safe-area-inset-right))", background: BG, color: CRIMSON, border: `1px solid ${CRIMSON}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, boxShadow: `0 0 10px -2px rgba(255,92,108,0.6)`, zIndex: 70 }}
+          className="w-10 h-10 font-bold flex items-center justify-center">✕</button>
       </div>
       <div className="flex-1 overflow-hidden touch-none" onTouchStart={z.onTouchStart} onTouchMove={z.onTouchMove} onTouchEnd={z.onTouchEnd} onWheel={z.onWheel} style={{ background: "#000" }}>
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -202,7 +231,7 @@ function TargetSpeedTab() {
     const tcpaClockMin = t2 + tcpaDeltaMin; // เวลานาฬิกา (นาทีนับเที่ยงคืน) ที่จุด CPA
     const er = polarToXY(Co, So);
     const em = vAdd(er, Vrel);
-    setScale(idealScaleForRangeYards(Math.max(r1yd, r2yd)));
+    setScale(idealScaleForRangeYards(Math.max(r1yd, r2yd), 1));
     setResult({ P1, P2, er, em, DRM, SRM, cpaPoint, cpaRange, cpaBearing, tcpaDeltaMin, tcpaClockMin, targetCourse: vBrg(em), targetSpeed: vLen(em) });
   }
   function generateProblem() {
@@ -217,7 +246,7 @@ function TargetSpeedTab() {
     setM1({ time: toHHMM(t1min), bearing: String(Math.round(b1)).padStart(3, "0"), range: String(Math.round(r1nm * YARDS_PER_NM)) });
     setM2({ time: toHHMM(t2min), bearing: String(Math.round(b2)).padStart(3, "0"), range: String(Math.round(r2nm * YARDS_PER_NM)) });
     setOwn({ course: String(ownCourse).padStart(3, "0"), speed: String(ownSpeed) });
-    setScale(idealScaleForRangeYards(Math.max(r1nm, r2nm) * YARDS_PER_NM));
+    setScale(idealScaleForRangeYards(Math.max(r1nm, r2nm) * YARDS_PER_NM, 1));
     setResult(null); setError("");
   }
   function clearAll() {
@@ -238,25 +267,25 @@ function TargetSpeedTab() {
   const boardVectors = result && (
     <g>
       {rmlSeg && (() => { const a = scD(rmlSeg.a), b = scD(rmlSeg.b); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={CRIMSON} strokeWidth="1.2" strokeDasharray="7 6" opacity="0.75" />; })()}
-      {(() => { const cp = scD(result.cpaPoint); return <line x1={CENTER.x} y1={CENTER.y} x2={cp.sx} y2={cp.sy} stroke={INK} strokeWidth="1" strokeDasharray="3 5" opacity="0.6" />; })()}
-      {(() => { const cp = scD(result.cpaPoint); return <circle cx={cp.sx} cy={cp.sy} r="6" fill="none" stroke={INK} strokeWidth="1.4" />; })()}
-      {(() => { const cp = scD(result.cpaPoint); return <text x={cp.sx} y={cp.sy - 14} fontSize="18" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">M3</text>; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <line x1={CENTER.x} y1={CENTER.y} x2={cp.sx} y2={cp.sy} stroke={PERP_BLUE} strokeWidth="2.2" strokeDasharray="5 4" opacity="1" />; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <circle cx={cp.sx} cy={cp.sy} r="6" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
+      {(() => { const cp = scD(result.cpaPoint); return <text x={cp.sx} y={cp.sy - 14} fontSize="18" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M3</text>; })()}
       {(() => { const p = scD(result.P1); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P1); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M1</text>; })()}
       {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P2); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M2</text>; })()}
-      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
-      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
-      {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">em</text>; })()}
+      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={RM_BLUE} strokeWidth="1.4" strokeDasharray="7 6" opacity="0.95" markerEnd="url(#arrowRm)" />; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)" />; })()}
+      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={ER_BLUE_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
+      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={EM_RED} strokeWidth="2" markerEnd="url(#arrowEm)" />; })()}
+      {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={EM_RED} textAnchor="middle" fontWeight="700">em</text>; })()}
     </g>
   );
 
   return (
     <TabShell>
-      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลระยะให้อัตโนมัติหลังกด "คำนวณ"' showDistanceRemark />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
+      <ScaleRow scale={scale} setScale={setScale} scales={[1, 2, 3, 4, 5]} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลระยะให้อัตโนมัติหลังกด "คำนวณ"' showDistanceRemark />
       <ResultCard>
         {result ? (
           <>
@@ -295,9 +324,9 @@ function WindTab() {
   const [mode, setMode] = useState("true"); // 'true' | 'desired'
   const [scale, setScale] = useState(3);
   const [own, setOwn] = useState({ course: "", speed: "" });
-  const [rw, setRw] = useState({ from: "", speed: "" }); // apparent/relative wind measured on deck
+  const [rw, setRw] = useState({ side: "starboard", angle: "", speed: "" }); // wind from, measured from bow on selected side
   const [tw, setTw] = useState({ from: "", speed: "" }); // true wind (known, for 'desired' mode)
-  const [desired, setDesired] = useState({ from: "", speed: "" }); // desired relative wind (for 'desired' mode)
+  const [desired, setDesired] = useState({ side: "starboard", angle: "", speed: "" });
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const z = useZoomPan();
@@ -305,8 +334,10 @@ function WindTab() {
   function solveTrueWind() {
     setError("");
     const Co = parseFloat(own.course), So = parseFloat(own.speed);
-    const rwFrom = parseFloat(rw.from), rwSpeed = parseFloat(rw.speed);
-    if ([Co, So, rwFrom, rwSpeed].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง"); setResult(null); return; }
+    const rwAngle = parseFloat(rw.angle), rwSpeed = parseFloat(rw.speed);
+    if ([Co, So, rwAngle, rwSpeed].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง"); setResult(null); return; }
+    if (rwAngle < 0 || rwAngle > 180 || rwSpeed <= 0 || So < 0) { setError("มุมลมสัมพันธ์ต้องอยู่ระหว่าง 000-180° และความเร็วต้องมากกว่า 0"); setResult(null); return; }
+    const rwFrom = relativeFromBearing(rw.side, rwAngle);
     const er = polarToXY(Co, So);
     const awFromTrue = mod360(Co + rwFrom);
     const awTowardTrue = mod360(awFromTrue + 180);
@@ -321,36 +352,55 @@ function WindTab() {
   function solveDesired() {
     setError("");
     const twFrom = parseFloat(tw.from), twSpeed = parseFloat(tw.speed);
-    const dFrom = parseFloat(desired.from), dSpeed = parseFloat(desired.speed);
-    if ([twFrom, twSpeed, dFrom, dSpeed].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง"); setResult(null); return; }
+    const dAngle = parseFloat(desired.angle), dSpeed = parseFloat(desired.speed);
+    if ([twFrom, twSpeed, dAngle, dSpeed].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง"); setResult(null); return; }
+    if (dAngle < 0 || dAngle > 180 || dSpeed <= 0 || twSpeed < 0) { setError("มุมลมสัมพันธ์ต้องอยู่ระหว่าง 000-180° และความเร็วต้องถูกต้อง"); setResult(null); return; }
+    const dFrom = relativeFromBearing(desired.side, dAngle);
     const delta = mod360(dFrom + 180); // offset of apparent-wind(toward) relative to ship's head
     const rad = toRad(delta);
     const cosD = Math.cos(rad), sinD = Math.sin(rad);
     const disc = twSpeed * twSpeed - dSpeed * dSpeed * sinD * sinD;
-    if (disc < 0) { setError("ไม่มีคำตอบ — ลมจริงเบาเกินไปสำหรับลมสัมพัทธ์ที่ต้องการ"); setResult(null); return; }
-    const sq = Math.sqrt(disc);
-    const cands = [-dSpeed * cosD + sq, -dSpeed * cosD - sq].filter((s) => s > 0.05);
-    if (cands.length === 0) { setError("ไม่มีคำตอบที่เป็นไปได้ (ความเร็วออกมาติดลบ)"); setResult(null); return; }
-    const So = Math.min(...cands);
-    const altSo = cands.length > 1 ? Math.max(...cands) : null;
+    if (disc < -1e-9) { setError("ไม่มีคำตอบ — ทิศและความเร็วลมสัมพันธ์ที่กำหนดไม่สามารถเกิดขึ้นกับลมจริงนี้ได้"); setResult(null); return; }
+    const sq = Math.sqrt(Math.max(0, disc));
     const wDirToward = mod360(twFrom + 180);
-    const phi = toDeg(Math.atan2(dSpeed * sinD, So + dSpeed * cosD));
-    const Co = mod360(wDirToward - phi);
-    const er = polarToXY(Co, So);
-    const awVec = polarToXY(mod360(Co + delta), dSpeed);
-    const ew = vAdd(er, awVec);
-    // sanity check: recompute the relative wind that this Co/So would actually produce
-    const checkAwToward = vSub(ew, er);
-    const checkAwFromTrue = mod360(vBrg(checkAwToward) + 180);
-    const checkRelFrom = mod360(checkAwFromTrue - Co);
-    const checkRelSpeed = vLen(checkAwToward);
-    setScale(idealScaleForSpeed(Math.max(So, twSpeed, dSpeed, altSo || 0)));
-    setResult({ mode: "desired", Co, So, altSo, er, ew, awTip: ew, checkRelFrom, checkRelSpeed });
+    const speeds = [...new Set([-dSpeed * cosD + sq, -dSpeed * cosD - sq].map((s) => +s.toFixed(10)))]
+      .filter((s) => s > 0.05)
+      .sort((a, b) => a - b);
+    if (speeds.length === 0) { setError("ไม่มีคำตอบที่เป็นไปได้ (ความเร็วเรือติดลบ)"); setResult(null); return; }
+    const solutions = speeds.map((So, index) => {
+      const phi = toDeg(Math.atan2(dSpeed * sinD, So + dSpeed * cosD));
+      const Co = mod360(wDirToward - phi);
+      const er = polarToXY(Co, So);
+      const awVec = polarToXY(mod360(Co + delta), dSpeed);
+      const ew = vAdd(er, awVec);
+      const checkAwToward = vSub(ew, er);
+      const checkAwFromTrue = mod360(vBrg(checkAwToward) + 180);
+      const checkRel = bearingToRelativeSide(mod360(checkAwFromTrue - Co));
+      return { Co, So, er, ew, awTip: ew, checkRel, checkRelSpeed: vLen(checkAwToward), label: index === 0 ? "เข็มทวนลม (ความเร็วต่ำ)" : "เข็มตามลม (ความเร็วสูง)" };
+    });
+    const primary = solutions[0];
+    setScale(idealScaleForSpeed(Math.max(twSpeed, dSpeed, ...solutions.map((s) => s.So))));
+    setResult({ mode: "desired", solutions, ...primary });
+  }
+
+  function generateProblem() {
+    const rc = () => Math.floor(Math.random() * 360);
+    const rs = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
+    const side = Math.random() < 0.5 ? "port" : "starboard";
+    if (mode === "true") {
+      setOwn({ course: String(rc()).padStart(3, "0"), speed: String(rs(10, 24)) });
+      setRw({ side, angle: String(Math.floor(Math.random() * 121)), speed: String(rs(12, 35)) });
+    } else {
+      const twSpeed = rs(7, 14);
+      setTw({ from: String(rc()).padStart(3, "0"), speed: String(twSpeed) });
+      setDesired({ side, angle: String(Math.floor(Math.random() * 9)), speed: String(rs(twSpeed + 12, twSpeed + 24)) });
+    }
+    setResult(null); setError("");
   }
 
   function clearAll() {
-    setOwn({ course: "", speed: "" }); setRw({ from: "", speed: "" });
-    setTw({ from: "", speed: "" }); setDesired({ from: "", speed: "" });
+    setOwn({ course: "", speed: "" }); setRw({ side: "starboard", angle: "", speed: "" });
+    setTw({ from: "", speed: "" }); setDesired({ side: "starboard", angle: "", speed: "" });
     setResult(null); setError("");
   }
 
@@ -358,8 +408,8 @@ function WindTab() {
   const boardVectors = result && (
     <g>
       {(() => { const a = sc(result.er), b = sc(result.awTip); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
-      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)" />; })()}
+      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={ER_BLUE_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
       {(() => { const a = sc(result.ew); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
       {(() => { const a = sc(result.ew); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">ew</text>; })()}
     </g>
@@ -367,9 +417,9 @@ function WindTab() {
 
   return (
     <TabShell>
-      <ModeRow options={[["true", "หา True Wind"], ["desired", "เข็มรับลม (ฮ./บิน)"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
-      <ScaleRow scale={scale} setScale={setScale} extra={`ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' />
+      <ModeRow options={[["true", "หา True Wind"], ["desired", "เข็มรับ ฮ."]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
+      <ScaleRow scale={scale} setScale={setScale} extra={`ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' />
 
       <ResultCard>
         {result && result.mode === "true" && (
@@ -377,11 +427,16 @@ function WindTab() {
         )}
         {result && result.mode === "desired" && (
           <>
-            <BigAnswer>เดินเข็ม <Accent>{fmtBrg(result.Co)}</Accent> ความเร็ว <Accent>{fmt(result.So)} นอต</Accent></BigAnswer>
-            <div style={{ color: "#78A48A", fontFamily: FONT_BODY }} className="text-[13px] text-center mt-1 leading-relaxed">
-              ตรวจคำตอบ: ที่เข็ม/ความเร็วนี้ ลมข้ามดาดฟ้าจะมาจาก {fmtBrg(result.checkRelFrom)} (สัมพัทธ์) ความเร็ว {fmt(result.checkRelSpeed)} kt
-            </div>
-            {result.altSo && <div style={{ color: INK_SOFT }} className="text-xs text-center mt-1">(อีกคำตอบที่เป็นไปได้: {fmt(result.altSo)} นอต ที่เข็มอื่น — ระบบเลือกความเร็วต่ำกว่าให้)</div>}
+            <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.12em" }} className="text-[12px] text-center mb-2">◆ คำตอบเข็มรับ ฮ.</div>
+            {result.solutions.map((solution, index) => (
+              <div key={`${solution.Co}-${solution.So}`} style={{ borderTop: index ? `1px dashed ${PANEL_LINE_BRIGHT}` : "none", paddingTop: index ? "10px" : 0, marginTop: index ? "10px" : 0 }}>
+                <div style={{ color: index ? CRIMSON : AMBER, fontFamily: FONT_BODY }} className="text-[13px] text-center">{solution.label}</div>
+                <BigAnswer>เดินเข็ม <Accent>{fmtBrg(solution.Co)}</Accent> ความเร็ว <Accent>{fmt(solution.So)} นอต</Accent></BigAnswer>
+                <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] text-center mt-1 leading-relaxed">
+                  ตรวจคำตอบ: ลมสัมพันธ์ {fmtRelative(solution.checkRel.side, solution.checkRel.angle)} · {fmt(solution.checkRelSpeed)} kt
+                </div>
+              </div>
+            ))}
           </>
         )}
         {!result && <EmptyNote />}
@@ -393,20 +448,20 @@ function WindTab() {
             <SectionLabel>Own Ship</SectionLabel>
             <TwoField l1="เข็ม °T" l2="ความเร็ว kt" v1={own.course} v2={own.speed} onC1={(e) => setOwn((p) => ({ ...p, course: e.target.value }))} onC2={(e) => setOwn((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
             <SubDivider />
-            <SectionLabel>ลมที่วัดได้บนดาดฟ้า (Relative Wind)</SectionLabel>
-            <TwoField l1="ทิศลมพัดมาจาก (สัมพัทธ์)" l2="ความเร็ว" v1={rw.from} v2={rw.speed} onC1={(e) => setRw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setRw((p) => ({ ...p, speed: e.target.value }))} p1="°rel" p2="kt" />
-            <div style={{ color: INK_SOFT, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">วัดตามเข็มนาฬิกาจากหัวเรือ: 000° = ลมมาตรงหัวเรือ, 090° = มาทางกราบขวา, 180° = มาทางท้ายเรือ</div>
-            <ButtonRow onClear={clearAll} onSolve={solveTrueWind} solveLabel="หา True Wind" />
+            <SectionLabel>ลมที่วัดได้บนดาดฟ้า (ลมสัมพันธ์)</SectionLabel>
+            <RelativeWindField value={rw} onChange={setRw} />
+            <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">นับจากหัวเรือไปทางท้ายเรือ: 000° = ตรงหัวเรือ · 090° = ข้างเรือ · 180° = ท้ายเรือ</div>
+            <ButtonRow onClear={clearAll} onRandom={generateProblem} onSolve={solveTrueWind} solveLabel="หา True Wind" />
           </>
         ) : (
           <>
             <SectionLabel>ลมจริง (True Wind) ที่ทราบอยู่แล้ว</SectionLabel>
             <TwoField l1="ทิศลมพัดมาจาก (จริง)" l2="ความเร็ว" v1={tw.from} v2={tw.speed} onC1={(e) => setTw((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setTw((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
             <SubDivider />
-            <SectionLabel>ลมข้ามดาดฟ้าที่ต้องการ (Desired Relative Wind)</SectionLabel>
-            <TwoField l1="ทิศที่ต้องการให้ลมมา (สัมพัทธ์)" l2="ความเร็วที่ต้องการ" v1={desired.from} v2={desired.speed} onC1={(e) => setDesired((p) => ({ ...p, from: e.target.value }))} onC2={(e) => setDesired((p) => ({ ...p, speed: e.target.value }))} p1="°rel เช่น 000" p2="kt" />
-            <div style={{ color: INK_SOFT, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">ปกติการรับ ฮ. ต้องการลมมาตรงหัวเรือหรือใกล้เคียง → ใส่ 000° (เรือจะวิ่งทวนลมโดยประมาณ)</div>
-            <ButtonRow onClear={clearAll} onSolve={solveDesired} solveLabel="หาเข็ม/ความเร็ว" />
+            <SectionLabel>ทิศของลมที่ต้องการ</SectionLabel>
+            <RelativeWindField value={desired} onChange={setDesired} speedLabel="ความเร็วที่ต้องการ" />
+            <div style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_BODY }} className="text-[12px] mt-1 leading-relaxed">เลือกกราบซ้ายหรือขวา แล้วกรอกมุม 000-180° ที่นับจากหัวเรือไปทางท้ายเรือ</div>
+            <ButtonRow onClear={clearAll} onRandom={generateProblem} onSolve={solveDesired} solveLabel="หาเข็ม/ความเร็ว" />
           </>
         )}
         {error && <ErrorText>{error}</ErrorText>}
@@ -511,6 +566,26 @@ function StationTab() {
     setTimeMinInput(""); setCourseInput(""); setSpeedInput(""); setResult(null); setError("");
   }
 
+  function generateProblem() {
+    const rc = () => Math.floor(Math.random() * 360);
+    const rs = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
+    const Cg = rc(), Sg = rs(12, 22), Co = rc(), So = rs(16, 30);
+    const em = polarToXY(Cg, Sg), er = polarToXY(Co, So);
+    const sign = centerMode === "ownship" ? -1 : 1;
+    const rm = { x: (er.x - em.x) / sign, y: (er.y - em.y) / sign };
+    const SRM = Math.max(vLen(rm), 0.1), dir = vBrg(rm);
+    const T = Math.floor(rs(10, 26));
+    const P1 = polarToXY(rc(), rs(2.5, 5.5));
+    const P2 = vAdd(P1, polarToXY(dir, SRM * T / 60));
+    setGuide({ course: String(Cg).padStart(3, "0"), speed: String(Sg) });
+    setM1({ bearing: String(Math.round(vBrg(P1))).padStart(3, "0"), range: String(Math.round(vLen(P1) * YARDS_PER_NM)) });
+    setM2({ bearing: String(Math.round(vBrg(P2))).padStart(3, "0"), range: String(Math.round(vLen(P2) * YARDS_PER_NM)) });
+    setTimeMinInput(String(T));
+    setCourseInput(String(Co).padStart(3, "0"));
+    setSpeedInput(String(So));
+    setResult(null); setError("");
+  }
+
   const sc = (xy) => xyToScreenSpeedScaled(xy.x, xy.y, scale);
   const scD = (xy) => xyToScreenDistanceScaled(xy.x, xy.y, scale);
   const centerLabel = centerMode === "ownship" ? "เรือเรา" : "GUIDE";
@@ -521,11 +596,11 @@ function StationTab() {
       {(() => { const p = scD(result.P1); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M1</text>; })()}
       {(() => { const p = scD(result.P2); return <circle cx={p.sx} cy={p.sy} r="7" fill={CRIMSON} stroke={PAPER} strokeWidth="1.5" />; })()}
       {(() => { const p = scD(result.P2); return <text x={p.sx} y={p.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">M2</text>; })()}
-      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)" />; })()}
-      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={AMBER_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
-      {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">em</text>; })()}
+      {(() => { const a = sc(result.er), b = sc(result.em); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={RM_BLUE} strokeWidth="1.4" strokeDasharray="7 6" opacity="0.95" markerEnd="url(#arrowRm)" />; })()}
+      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)" />; })()}
+      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={ER_BLUE_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
+      {(() => { const a = sc(result.em); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={EM_RED} strokeWidth="2" markerEnd="url(#arrowEm)" />; })()}
+      {(() => { const a = sc(result.em); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={EM_RED} textAnchor="middle" fontWeight="700">em</text>; })()}
       <text x={CENTER.x} y={CENTER.y + 26} fontSize="13" fontFamily={FONT_MONO} fill={INK} textAnchor="middle" fontWeight="700">{centerLabel}</text>
     </g>
   );
@@ -533,9 +608,9 @@ function StationTab() {
   return (
     <TabShell>
       <ModeRow options={[["ownship", "เรือเราอยู่ศูนย์กลาง"], ["guide", "Guide อยู่ศูนย์กลาง"]]} value={centerMode} onChange={(v) => { setCenterMode(v); setResult(null); setError(""); }} />
-      <ModeRow options={[["byTime", "รู้เวลา"], ["byCourse", "รู้เข็ม"], ["bySpeed", "รู้ความเร็ว"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
-      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' showDistanceRemark />
+      <ModeRow options={[["byTime", "ด้วยเวลา"], ["byCourse", "ด้วยเข็ม"], ["bySpeed", "ด้วยความเร็ว"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
+      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' showDistanceRemark />
 
       <ResultCard>
         {result ? (
@@ -566,18 +641,18 @@ function StationTab() {
         )}
         {mode === "byCourse" && (
           <>
-            <SectionLabel>เข็มที่จะใช้เดิน</SectionLabel>
+            <SectionLabel>เข็มที่จะใช้เข้าสถานี</SectionLabel>
             <Field value={courseInput} onChange={(e) => setCourseInput(e.target.value)} placeholder="°T" />
           </>
         )}
         {mode === "bySpeed" && (
           <>
-            <SectionLabel>ความเร็วที่จะใช้เดิน</SectionLabel>
+            <SectionLabel>ความเร็วที่จะใช้เข้าสถานี</SectionLabel>
             <Field value={speedInput} onChange={(e) => setSpeedInput(e.target.value)} placeholder="kt" />
           </>
         )}
         {mode === "minSpeed" && <div style={{ color: INK_SOFT }} className="text-xs">ระบบจะหาเข็ม+ความเร็วต่ำสุดที่พาไปสถานีใหม่ได้ให้เอง</div>}
-        <ButtonRow onClear={clearAll} onSolve={solve} solveLabel="คำนวณ" />
+        <ButtonRow onClear={clearAll} onRandom={generateProblem} onSolve={solve} solveLabel="คำนวณ" />
         {error && <ErrorText>{error}</ErrorText>}
       </InputCard>
       <ZoomModal z={z}><BoardChrome>{boardVectors}</BoardChrome></ZoomModal>
@@ -716,6 +791,18 @@ function TSDTab() {
   function clearAll() {
     setTimeInput(""); setSpeedInput(""); setDistInput(""); setResult(null); setError("");
   }
+  function generateProblem() {
+    const speed = +(6 + Math.random() * 24).toFixed(1);
+    const time = Math.floor(4 + Math.random() * 57);
+    const distYd = speed * time * YD_PER_KT_MIN;
+    const units = ["yd", "nm", "mi"];
+    const unit = units[Math.floor(Math.random() * units.length)];
+    setDistUnit(unit);
+    setTimeInput(String(time));
+    setSpeedInput(String(speed));
+    setDistInput((distYd / YD_PER_UNIT[unit]).toFixed(unit === "yd" ? 0 : 2));
+    setResult(null); setError("");
+  }
 
   return (
     <TabShell>
@@ -769,7 +856,7 @@ function TSDTab() {
                   {["yd", "nm", "mi"].map((u) => (
                     <button key={u} onClick={() => setDistUnit(u)}
                       style={{
-                        background: distUnit === u ? "rgba(79,216,232,0.16)" : PANEL,
+                        background: distUnit === u ? "rgba(79,216,232,0.18)" : "rgba(2,7,13,0.96)",
                         color: distUnit === u ? AMBER : TEXT_MUTE,
                         border: `1px solid ${distUnit === u ? AMBER : PANEL_LINE}`,
                         clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
@@ -782,7 +869,7 @@ function TSDTab() {
             </div>
           )}
         </div>
-        <ButtonRow onClear={clearAll} onSolve={solve} solveLabel="คำนวณ" />
+        <ButtonRow onClear={clearAll} onRandom={generateProblem} onSolve={solve} solveLabel="คำนวณ" />
         {error && <ErrorText>{error}</ErrorText>}
       </InputCard>
     </TabShell>
@@ -808,54 +895,53 @@ function TabIcon({ id, active }) {
 export default function App() {
   const [tab, setTab] = useState("target");
   const tabs = [
-    ["target", "เข็ม/ความเร็ว"],
+    ["target", "TMA"],
     ["wind", "ปัญหาลม"],
     ["station", "เข้าสถานี"],
     ["tsd", "T-S-D"],
   ];
   return (
-    <div style={{ background: BG, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
+    <div style={{ background: `radial-gradient(circle at 50% -10%, rgba(18,62,82,0.24), transparent 32%), ${BG}`, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500&display=swap');
         ::placeholder { color: #B7BEC3; opacity: 1; }
         body { font-weight: 400; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-        button { transition: opacity 0.15s ease, transform 0.1s ease, background 0.15s ease; }
-        button:active { transform: scale(0.96); }
-        button:focus-visible, input:focus-visible { outline: 2px solid ${AMBER}; outline-offset: 2px; }
+        button { cursor: pointer; border-radius: 8px; transition: filter 0.15s ease, transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease; }
+        button:not(:disabled):hover { filter: brightness(1.18); }
+        button:active { transform: scale(0.96); filter: brightness(1.3); }
+        button:focus-visible { outline: 2px solid ${AMBER}; outline-offset: 3px; }
+        input:focus-visible { outline: none; border-color: ${AMBER} !important; box-shadow: inset 0 1px 8px rgba(0,0,0,0.9), 0 0 0 1px ${AMBER}, 0 0 13px rgba(79,216,232,0.38) !important; }
         button:disabled { cursor: not-allowed; opacity: 0.5; }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
         input { font-size: 16px !important; }
       `}</style>
 
-      <div className="w-full max-w-md flex items-center justify-between px-4 pt-4 pb-1">
+      <div className="w-full max-w-md flex items-center justify-between px-4 pt-4 pb-3">
         <div className="flex items-center gap-2">
-          <span style={{ background: AMBER, boxShadow: `0 0 8px ${AMBER}` }} className="w-1.5 h-1.5 rounded-full inline-block" />
-          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.13em", color: TEXT_LIGHT, fontWeight: 500 }} className="text-[15px] uppercase">MB · Solver</span>
+          <span style={{ color: AMBER, border: `1px solid ${AMBER}`, boxShadow: "0 0 12px rgba(79,216,232,0.18)" }} className="w-9 h-9 rounded-full inline-flex items-center justify-center text-lg">⚓</span>
+          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.025em", color: TEXT_LIGHT, fontWeight: 400 }} className="text-[17px]">กระดานหนพื้นฐาน</span>
         </div>
-        <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_MONO }} className="text-[11px] uppercase tracking-wider">Pub.1310 Ref</span>
+        <span style={{ color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE}`, borderRadius: "7px", fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wider px-2 py-1.5">PUB.1310</span>
       </div>
 
-      <div className="w-full max-w-md flex gap-1 px-4">
+      <div className="w-full max-w-md grid grid-cols-4 gap-1 px-4">
         {tabs.map(([id, label]) => {
           const active = tab === id;
           return (
             <button key={id} onClick={() => setTab(id)} aria-pressed={active} aria-label={`เปิดเครื่องมือ ${label}`}
               style={{
-                background: active ? "rgba(79,216,232,0.08)" : "transparent",
+                background: active ? "rgba(79,216,232,0.12)" : "rgba(5,16,27,0.94)",
                 color: active ? TEXT_LIGHT : TEXT_MUTE,
-                borderTop: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
-                borderLeft: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
-                borderRight: `1px solid ${active ? PANEL_LINE_BRIGHT : "transparent"}`,
-                borderBottom: `2px solid ${active ? AMBER : "transparent"}`,
-                boxShadow: active ? `0 -2px 16px -6px rgba(79,216,232,0.5)` : "none",
+                border: `1px solid ${active ? AMBER : "rgba(79,216,232,0.32)"}`,
+                boxShadow: active ? `inset 0 0 12px rgba(79,216,232,0.10), 0 0 10px rgba(79,216,232,0.24)` : "inset 0 1px 0 rgba(255,255,255,0.025)",
               }}
-              className="flex-1 flex flex-col items-center gap-1 text-[12px] px-2 pt-3 pb-2.5 rounded-t-md font-normal tracking-wide">
+              className="flex flex-col items-center gap-1 text-[12px] px-1 pt-3 pb-2.5 rounded-md font-normal tracking-wide">
               <TabIcon id={id} active={active} />
               {label}
             </button>
           );
         })}
       </div>
-      <div style={{ borderTop: `1px solid ${PANEL_LINE}`, background: "rgba(6,11,18,0.5)" }} className="w-full">
+      <div style={{ borderTop: `1px solid rgba(79,216,232,0.12)`, background: "transparent" }} className="w-full">
         {tab === "target" && <TargetSpeedTab />}
         {tab === "wind" && <WindTab />}
         {tab === "station" && <StationTab />}
@@ -871,31 +957,19 @@ export default function App() {
 function TabShell({ children }) {
   return <div className="w-full flex flex-col items-center p-4 gap-3.5">{children}</div>;
 }
-function CornerBrackets({ color = AMBER }) {
-  const s = 16, w = 2;
-  const arm = (style) => <div style={{ position: "absolute", width: s, height: s, filter: `drop-shadow(0 0 3px ${color})`, ...style }} />;
-  return (
-    <>
-      {arm({ top: -1, left: -1, borderTop: `${w}px solid ${color}`, borderLeft: `${w}px solid ${color}` })}
-      {arm({ top: -1, right: -1, borderTop: `${w}px solid ${color}`, borderRight: `${w}px solid ${color}` })}
-      {arm({ bottom: -1, left: -1, borderBottom: `${w}px solid ${color}`, borderLeft: `${w}px solid ${color}` })}
-      {arm({ bottom: -1, right: -1, borderBottom: `${w}px solid ${color}`, borderRight: `${w}px solid ${color}` })}
-    </>
-  );
-}
 function GlassPanel({ children, accentLeft, style }) {
   return (
     <div
       style={{
-        background: "linear-gradient(155deg, rgba(18,30,44,0.82), rgba(9,15,23,0.86))",
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
+        background: "linear-gradient(180deg, rgba(7,20,32,0.94), rgba(3,12,21,0.97))",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
         border: `1px solid ${PANEL_LINE}`,
-        borderLeft: accentLeft ? `3px solid ${AMBER}` : `1px solid ${PANEL_LINE}`,
-        boxShadow: accentLeft ? `0 0 22px -6px rgba(79,216,232,0.35), 0 8px 24px -8px rgba(0,0,0,0.6)` : "0 8px 24px -8px rgba(0,0,0,0.6)",
+        borderTop: accentLeft ? `1px solid rgba(79,216,232,0.58)` : `1px solid ${PANEL_LINE}`,
+        boxShadow: accentLeft ? `0 0 18px -10px rgba(79,216,232,0.55), 0 10px 26px -18px rgba(0,0,0,0.9)` : "0 10px 26px -18px rgba(0,0,0,0.9)",
         ...style,
       }}
-      className="w-full max-w-md rounded-md p-4 relative overflow-hidden"
+      className="w-full max-w-md rounded-xl p-4 relative overflow-hidden"
     >
       {children}
     </div>
@@ -903,12 +977,11 @@ function GlassPanel({ children, accentLeft, style }) {
 }
 function BoardCard({ children, zOpen }) {
   return (
-    <div className="w-full max-w-md relative" style={{ padding: "2px" }}>
-      <CornerBrackets />
-      <div style={{ background: PAPER, borderRadius: "3px", boxShadow: `0 0 26px -8px rgba(79,216,232,0.4)` }} className="p-2 relative">
+    <div className="w-full max-w-md relative">
+      <div style={{ background: "#020A13", border: `1px solid ${PANEL_LINE}`, borderRadius: "12px", boxShadow: `0 0 24px -13px rgba(79,216,232,0.65)` }} className="p-2 relative overflow-hidden">
         <button onClick={zOpen}
-          style={{ background: "rgba(5,9,16,0.85)", color: AMBER, border: `1px solid ${AMBER}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, letterSpacing: "0.04em", boxShadow: "0 0 10px -2px rgba(79,216,232,0.6)" }}
-          className="absolute top-3 right-3 z-10 text-[11px] px-3 py-2 font-normal uppercase">⤢ Zoom</button>
+          style={{ background: "rgba(2,10,19,0.92)", color: AMBER, border: `1px solid ${AMBER}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, letterSpacing: "0.04em", boxShadow: "0 0 10px -3px rgba(79,216,232,0.65)" }}
+          className="absolute top-3 right-3 z-10 text-[11px] px-3 py-2 font-normal uppercase">⤢ ขยาย</button>
         {children}
       </div>
     </div>
@@ -917,7 +990,6 @@ function BoardCard({ children, zOpen }) {
 function ResultCard({ children }) {
   return (
     <GlassPanel accentLeft>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "40%", background: `linear-gradient(180deg, rgba(79,216,232,0.06), transparent)`, animation: "scanline 5s linear infinite", pointerEvents: "none" }} />
       {children}
     </GlassPanel>
   );
@@ -935,7 +1007,7 @@ function EmptyNote() {
 function BigAnswer({ children }) {
   return (
     <div>
-      <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.16em", fontWeight: 400 }} className="text-[12px] uppercase text-center mb-2">◆ Output</div>
+      <div style={{ color: AMBER, fontFamily: FONT_HEAD, letterSpacing: "0.06em", fontWeight: 400 }} className="text-[13px] text-center mb-2">ผลการคำนวณ</div>
       <div style={{ color: TEXT_LIGHT, fontFamily: FONT_MONO, fontWeight: 500 }} className="text-[17px] text-center mb-1 leading-relaxed">{children}</div>
     </div>
   );
@@ -972,12 +1044,12 @@ function ModeRow({ options, value, onChange }) {
         return (
           <button key={id} onClick={() => onChange(id)}
             style={{
-              background: active ? "rgba(79,216,232,0.14)" : PANEL,
+              background: active ? "rgba(79,216,232,0.18)" : "rgba(2,7,13,0.94)",
               color: active ? AMBER : TEXT_MUTE,
               border: `1px solid ${active ? AMBER : PANEL_LINE}`,
               clipPath: CHAMFER_SM,
               fontFamily: FONT_MONO, letterSpacing: "0.02em",
-              boxShadow: active ? `0 0 12px -3px rgba(79,216,232,0.6)` : "none",
+              boxShadow: active ? `inset 0 0 10px rgba(79,216,232,0.12), 0 0 12px -3px rgba(79,216,232,0.6)` : "inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
             className="px-3 py-2 text-[12px] font-normal">{label}</button>
         );
@@ -985,22 +1057,22 @@ function ModeRow({ options, value, onChange }) {
     </div>
   );
 }
-function ScaleRow({ scale, setScale, extra, note, showDistanceRemark }) {
+function ScaleRow({ scale, setScale, scales = [1, 2, 3, 4, 5], extra, note, showDistanceRemark }) {
   const ydPerRing = scale * 1000;
   const nmPerRing = ydPerRing / YARDS_PER_NM;
   return (
     <div className="w-full max-w-md flex items-center justify-center gap-1.5 flex-wrap">
       <span style={{ color: TEXT_LIGHT_MUTE, fontFamily: FONT_HEAD }} className="text-[12px] uppercase tracking-wider mr-0.5">Scale</span>
-      {[2, 3, 4, 5].map((s) => {
+      {scales.map((s) => {
         const active = scale === s;
         return (
           <button key={s} onClick={() => setScale(s)}
             style={{
-              background: active ? "rgba(255,92,108,0.16)" : PANEL,
+              background: active ? "rgba(79,216,232,0.18)" : "rgba(2,7,13,0.94)",
               color: active ? "#fff" : TEXT_MUTE,
-              border: `1px solid ${active ? CRIMSON : PANEL_LINE}`,
+              border: `1px solid ${active ? AMBER : PANEL_LINE_BRIGHT}`,
               clipPath: CHAMFER_SM, fontFamily: FONT_MONO,
-              boxShadow: active ? `0 0 10px -3px rgba(255,92,108,0.6)` : "none",
+              boxShadow: active ? `inset 0 0 10px rgba(79,216,232,0.10), 0 0 10px -3px rgba(79,216,232,0.7)` : "inset 0 1px 0 rgba(255,255,255,0.04)",
             }}
             className="px-3 py-1.5 text-[12px] font-medium">{s}:1</button>
         );
@@ -1019,7 +1091,7 @@ function ButtonRow({ onClear, onRandom, onSolve, solveLabel = "คำนวณ" 
   return (
     <div className="flex gap-2 mt-4">
       <button onClick={onClear}
-        style={{ background: "transparent", color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO }}
+        style={{ background: "rgba(2,7,13,0.96)", color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE_BRIGHT}`, clipPath: CHAMFER_SM, fontFamily: FONT_MONO, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)" }}
         className="px-3.5 py-3 text-sm font-normal uppercase">Clear</button>
       {onRandom && (
         <button onClick={onRandom}
@@ -1027,7 +1099,7 @@ function ButtonRow({ onClear, onRandom, onSolve, solveLabel = "คำนวณ" 
           className="flex-1 py-3 text-sm font-normal tracking-wide">สุ่มโจทย์</button>
       )}
       <button onClick={onSolve}
-        style={{ background: "linear-gradient(135deg, rgba(79,216,232,0.28), rgba(79,216,232,0.12))", color: "#EAFEFF", border: `1px solid ${AMBER}`, clipPath: CHAMFER, fontFamily: FONT_MONO, animation: "pulseGlow 2.6s ease-in-out infinite" }}
+        style={{ background: "linear-gradient(135deg, rgba(255,92,108,0.18), rgba(255,92,108,0.08))", color: "#FFDDE2", border: `1px solid ${CRIMSON}`, clipPath: CHAMFER, fontFamily: FONT_MONO, boxShadow: "0 0 12px -5px rgba(255,92,108,0.8)" }}
         className="flex-1 py-3 text-sm font-medium tracking-wide">▶ {solveLabel}</button>
     </div>
   );
@@ -1059,10 +1131,26 @@ function TwoField({ l1, l2, v1, v2, onC1, onC2, p1, p2 }) {
     </>
   );
 }
+function RelativeWindField({ value, onChange, speedLabel = "ความเร็ว" }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1.05fr 0.8fr 0.9fr", columnGap: "8px", rowGap: "5px" }}>
+      <MiniLabel>กราบที่ลมมา</MiniLabel><MiniLabel>มุมจากหัวเรือ</MiniLabel><MiniLabel>{speedLabel}</MiniLabel>
+      <div className="flex gap-1">
+        {[["port", "ซ้าย"], ["starboard", "ขวา"]].map(([side, label]) => (
+          <button key={side} type="button" onClick={() => onChange((p) => ({ ...p, side }))}
+            style={{ background: value.side === side ? "rgba(79,216,232,0.18)" : "rgba(2,7,13,0.96)", color: value.side === side ? AMBER : TEXT_MUTE, border: `1px solid ${value.side === side ? AMBER : PANEL_LINE_BRIGHT}`, clipPath: CHAMFER_SM, fontFamily: FONT_BODY, boxShadow: value.side === side ? "0 0 10px -3px rgba(79,216,232,0.58)" : "inset 0 1px 0 rgba(255,255,255,0.04)" }}
+            className="flex-1 min-w-0 px-1 py-2.5 text-[12px]">{label}</button>
+        ))}
+      </div>
+      <Field value={value.angle} onChange={(e) => onChange((p) => ({ ...p, angle: e.target.value }))} placeholder="000-180°" />
+      <Field value={value.speed} onChange={(e) => onChange((p) => ({ ...p, speed: e.target.value }))} placeholder="kt" />
+    </div>
+  );
+}
 function Field({ value, onChange, placeholder }) {
   return (
     <input value={value} onChange={onChange} placeholder={placeholder} inputMode="numeric"
-      style={{ border: `1px solid ${PANEL_LINE_BRIGHT}`, borderRadius: "4px", padding: "11px 7px", fontFamily: FONT_MONO, fontWeight: 400, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "rgba(3,7,12,0.7)", transition: "box-shadow 0.15s ease" }} />
+      style={{ border: "1px solid rgba(79,216,232,0.42)", borderRadius: "4px", padding: "11px 7px", fontFamily: FONT_MONO, fontWeight: 400, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "#01050A", boxShadow: "inset 0 2px 10px rgba(0,0,0,0.88), inset 0 0 0 1px rgba(255,255,255,0.015)", transition: "border-color 0.15s ease, box-shadow 0.15s ease" }} />
   );
 }
 function ResultItem({ label, value, accent, wide }) {

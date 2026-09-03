@@ -9,8 +9,9 @@
 }
 
 * { box-sizing: border-box; }
-html { background: #050910; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+html { background: #020a13; overscroll-behavior: none; touch-action: pan-y; }
+body { margin: 0; min-width: 320px; min-height: 100dvh; overscroll-behavior-y: none; }
+#root { min-height: 100dvh; overflow-x: hidden; }
 button, input { font: inherit; }
 
 @keyframes pulseGlow {
