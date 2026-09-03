@@ -9,17 +9,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  overflow: hidden;
-  background: #020a13;
-  overscroll-behavior: none;
-  touch-action: pan-y;
-}
-body { min-width: 320px; position: fixed; inset: 0; }
-#root { width: 100%; height: 100%; overflow: hidden; }
+html { background: #020a13; overscroll-behavior: none; touch-action: pan-y; }
+body { margin: 0; min-width: 320px; min-height: 100dvh; overscroll-behavior-y: none; }
+#root { min-height: 100dvh; overflow-x: hidden; }
 button, input { font: inherit; }
 
 @keyframes pulseGlow {
