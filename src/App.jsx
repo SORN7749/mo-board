@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import boardImg from "./assets/maneuvering-board.jpg";
 
 /* ============================================================
@@ -41,6 +41,27 @@ const FONT_MONO = "'IBM Plex Mono', 'IBM Plex Sans Thai', monospace";
 // distinguishes actionable elements from soft-cornered content cards
 const CHAMFER = "none";
 const CHAMFER_SM = "none";
+
+function useSessionState(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const saved = window.sessionStorage.getItem(`mo-board:${key}`);
+      return saved === null ? initialValue : JSON.parse(saved);
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(`mo-board:${key}`, JSON.stringify(value));
+    } catch {
+      // The calculator remains fully usable when private browsing blocks storage.
+    }
+  }, [key, value]);
+
+  return [value, setValue];
+}
 
 const toRad = (d) => (d * Math.PI) / 180;
 const toDeg = (r) => (r * 180) / Math.PI;
@@ -88,6 +109,9 @@ function idealScaleForSpeed(maxKt, minScale = 1) {
   for (const s of [1, 2, 3, 4, 5]) if (s >= minScale && maxKt / s <= RING_COUNT) return s;
   return 5;
 }
+const exceedsBoard = (maxValue, scale) => maxValue > RING_COUNT * scale + 1e-9;
+const rangeToYards = (value, unit) => Number(value) * (unit === "nm" ? YARDS_PER_NM : 1);
+const yardsToRange = (yards, unit) => unit === "nm" ? +(yards / YARDS_PER_NM).toFixed(2) : Math.round(yards);
 function vAdd(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
 function vSub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
 function vLen(a) { return Math.hypot(a.x, a.y); }
@@ -120,7 +144,15 @@ function BoardChrome({ children }) {
     <svg viewBox={`${boardViewX} ${boardViewY} ${boardViewSize} ${boardViewSize}`} className="w-full select-none" style={{ display: "block", aspectRatio: "1 / 1", background: "#020A13" }}>
       <defs>
         <clipPath id="boardClip"><circle cx={CENTER.x} cy={CENTER.y} r={MAX_R_PX} /></clipPath>
-        <radialGradient id="boardGlow"><stop offset="0" stopColor="#092234" /><stop offset="1" stopColor="#020A13" /></radialGradient>
+        <filter id="boardNightFilter" x="0" y="0" width="100%" height="100%" colorInterpolationFilters="sRGB">
+          <feColorMatrix
+            type="matrix"
+            values="-0.03 -0.08 -0.01 0 0.12
+                    -0.17 -0.56 -0.06 0 0.79
+                    -0.19 -0.63 -0.06 0 0.88
+                     0     0     0    1 0"
+          />
+        </filter>
         <marker id="arrowAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={AMBER_DEEP} /></marker>
         <marker id="arrowCrimson" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={CRIMSON} /></marker>
         <marker id="arrowInk" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={INK} /></marker>
@@ -128,8 +160,8 @@ function BoardChrome({ children }) {
         <marker id="arrowRm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={RM_BLUE} /></marker>
         <marker id="arrowEm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4.5" markerHeight="4.5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill={EM_RED} /></marker>
       </defs>
-      <rect x={boardViewX} y={boardViewY} width={boardViewSize} height={boardViewSize} fill="url(#boardGlow)" />
-      <image href={IMG_DATA} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid slice" style={{ filter: "invert(1) sepia(1) saturate(2.2) hue-rotate(133deg) brightness(0.64) contrast(1.18)", opacity: 0.78 }} />
+      <rect x={boardViewX} y={boardViewY} width={boardViewSize} height={boardViewSize} fill="#01070D" />
+      <image href={IMG_DATA} x="0" y="0" width={VB_W} height={VB_H} preserveAspectRatio="xMidYMid slice" filter="url(#boardNightFilter)" opacity="0.92" />
       <circle cx={CENTER.x} cy={CENTER.y} r={MAX_R_PX} fill="none" stroke={AMBER} strokeWidth="1.2" opacity="0.8" />
       <g clipPath="url(#boardClip)">{children}</g>
     </svg>
@@ -172,7 +204,7 @@ function useZoomPan() {
 
   return { zoomed, zScale, zX, zY, open, close, onTouchStart, onTouchMove, onTouchEnd, onWheel };
 }
-function ZoomModal({ z, children }) {
+function ZoomModal({ z, children, stepControls }) {
   if (!z.zoomed) return null;
   return (
     <div style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
@@ -190,6 +222,7 @@ function ZoomModal({ z, children }) {
           </div>
         </div>
       </div>
+      {stepControls && <div style={{ position: "fixed", left: "50%", bottom: "max(16px, env(safe-area-inset-bottom))", transform: "translateX(-50%)", zIndex: 70 }}>{stepControls}</div>}
     </div>
   );
 }
@@ -198,11 +231,12 @@ function ZoomModal({ z, children }) {
    TAB 1: Target Course / Speed + CPA / TCPA
    ============================================================ */
 function TargetSpeedTab() {
-  const [scale, setScale] = useState(2);
-  const [m1, setM1] = useState({ time: "", bearing: "", range: "" });
-  const [m2, setM2] = useState({ time: "", bearing: "", range: "" });
-  const [own, setOwn] = useState({ course: "", speed: "" });
-  const [result, setResult] = useState(null);
+  const [scale, setScale] = useSessionState("tma.scale", 2);
+  const [rangeUnit, setRangeUnit] = useSessionState("tma.rangeUnit", "yd");
+  const [m1, setM1] = useSessionState("tma.m1", { time: "", bearing: "", range: "" });
+  const [m2, setM2] = useSessionState("tma.m2", { time: "", bearing: "", range: "" });
+  const [own, setOwn] = useSessionState("tma.own", { course: "", speed: "" });
+  const [result, setResult] = useSessionState("tma.result", null);
   const [error, setError] = useState("");
   const z = useZoomPan();
 
@@ -212,8 +246,8 @@ function TargetSpeedTab() {
   function solve() {
     setError("");
     const t1 = hhmmToMinutes(m1.time), t2 = hhmmToMinutes(m2.time);
-    const b1 = parseFloat(m1.bearing), r1yd = parseFloat(m1.range);
-    const b2 = parseFloat(m2.bearing), r2yd = parseFloat(m2.range);
+    const b1 = parseFloat(m1.bearing), r1yd = rangeToYards(m1.range, rangeUnit);
+    const b2 = parseFloat(m2.bearing), r2yd = rangeToYards(m2.range, rangeUnit);
     const Co = parseFloat(own.course), So = parseFloat(own.speed);
     if ([t1, t2, b1, r1yd, b2, r2yd, Co, So].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง (ตรวจรูปแบบเวลา HHMM ด้วย)"); setResult(null); return; }
     const dt = t2 - t1;
@@ -231,27 +265,39 @@ function TargetSpeedTab() {
     const tcpaClockMin = t2 + tcpaDeltaMin; // เวลานาฬิกา (นาทีนับเที่ยงคืน) ที่จุด CPA
     const er = polarToXY(Co, So);
     const em = vAdd(er, Vrel);
-    setScale(idealScaleForRangeYards(Math.max(r1yd, r2yd), 1));
+    const maxPlot = Math.max(r1yd / 1000, r2yd / 1000, So, SRM, vLen(em));
+    if (exceedsBoard(maxPlot, scale)) { setError(`ข้อมูลเกินขอบกระดานที่สเกล ${scale}:1 กรุณาเลือกสเกลที่สูงขึ้น`); setResult(null); return; }
     setResult({ P1, P2, er, em, DRM, SRM, cpaPoint, cpaRange, cpaBearing, tcpaDeltaMin, tcpaClockMin, targetCourse: vBrg(em), targetSpeed: vLen(em) });
   }
   function generateProblem() {
     const rc = () => Math.round(Math.random() * 359), rs = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
-    const ownCourse = rc(), ownSpeed = rs(10, 20), tgtCourse = rc(), tgtSpeed = rs(8, 22);
-    const t1min = 600 + Math.floor(Math.random() * 300), dt = 5 + Math.floor(Math.random() * 10), t2min = t1min + dt;
-    const b1 = rc(), r1nm = rs(6, 16), P1 = polarToXY(b1, r1nm);
-    const VrelSim = vSub(polarToXY(tgtCourse, tgtSpeed), polarToXY(ownCourse, ownSpeed));
-    const P2 = { x: P1.x + (VrelSim.x * dt) / 60, y: P1.y + (VrelSim.y * dt) / 60 };
-    const b2 = vBrg(P2), r2nm = vLen(P2);
+    let ownCourse, ownSpeed, tgtCourse, tgtSpeed, t1min, dt, t2min, b1, r1nm, P1, P2, b2, r2nm;
+    do {
+      ownCourse = rc(); ownSpeed = rs(10, 20); tgtCourse = rc(); tgtSpeed = rs(8, 22);
+      t1min = 600 + Math.floor(Math.random() * 300); dt = 5 + Math.floor(Math.random() * 10); t2min = t1min + dt;
+      b1 = rc(); r1nm = rs(1, 9.5); P1 = polarToXY(b1, r1nm);
+      const VrelSim = vSub(polarToXY(tgtCourse, tgtSpeed), polarToXY(ownCourse, ownSpeed));
+      P2 = { x: P1.x + (VrelSim.x * dt) / 60, y: P1.y + (VrelSim.y * dt) / 60 };
+      b2 = vBrg(P2); r2nm = vLen(P2);
+    } while (Math.max(r1nm, r2nm) * YARDS_PER_NM > 20000);
     const toHHMM = (min) => String(Math.floor(min / 60) % 24).padStart(2, "0") + String(min % 60).padStart(2, "0");
-    setM1({ time: toHHMM(t1min), bearing: String(Math.round(b1)).padStart(3, "0"), range: String(Math.round(r1nm * YARDS_PER_NM)) });
-    setM2({ time: toHHMM(t2min), bearing: String(Math.round(b2)).padStart(3, "0"), range: String(Math.round(r2nm * YARDS_PER_NM)) });
+    const maxRangeYd = Math.max(r1nm, r2nm) * YARDS_PER_NM;
+    const nextUnit = maxRangeYd > 2 * YARDS_PER_NM ? "nm" : "yd";
+    setRangeUnit(nextUnit);
+    setM1({ time: toHHMM(t1min), bearing: String(Math.round(b1)).padStart(3, "0"), range: String(yardsToRange(r1nm * YARDS_PER_NM, nextUnit)) });
+    setM2({ time: toHHMM(t2min), bearing: String(Math.round(b2)).padStart(3, "0"), range: String(yardsToRange(r2nm * YARDS_PER_NM, nextUnit)) });
     setOwn({ course: String(ownCourse).padStart(3, "0"), speed: String(ownSpeed) });
-    setScale(idealScaleForRangeYards(Math.max(r1nm, r2nm) * YARDS_PER_NM, 1));
+    setScale(idealScaleForRangeYards(maxRangeYd, 1));
     setResult(null); setError("");
   }
   function clearAll() {
     setM1({ time: "", bearing: "", range: "" }); setM2({ time: "", bearing: "", range: "" });
     setOwn({ course: "", speed: "" }); setResult(null); setError("");
+  }
+  function changeRangeUnit(nextUnit) {
+    if (nextUnit === rangeUnit) return;
+    const convert = (point) => ({ ...point, range: point.range === "" ? "" : String(yardsToRange(rangeToYards(point.range, rangeUnit), nextUnit)) });
+    setM1(convert); setM2(convert); setRangeUnit(nextUnit);
   }
 
   const rmlSeg = result ? (() => {
@@ -285,7 +331,7 @@ function TargetSpeedTab() {
   return (
     <TabShell>
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
-      <ScaleRow scale={scale} setScale={setScale} scales={[1, 2, 3, 4, 5]} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลระยะให้อัตโนมัติหลังกด "คำนวณ"' showDistanceRemark />
+      <ScaleRow scale={scale} setScale={setScale} scales={[1, 2, 3, 4, 5]} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds · ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note="การสุ่มโจทย์จะเลือกสเกลเริ่มต้นที่เหมาะสมให้" showDistanceRemark />
       <ResultCard>
         {result ? (
           <>
@@ -302,9 +348,10 @@ function TargetSpeedTab() {
       </ResultCard>
       <InputCard>
         <SectionLabel>Target Observations</SectionLabel>
+        <ModeRow options={[["yd", "ระยะเป็นหลา"], ["nm", "ระยะเป็น NM"]]} value={rangeUnit} onChange={changeRangeUnit} />
         <div style={rowGrid4} className="mb-1.5"><div /><MiniLabel>เวลาพบเป้า</MiniLabel><MiniLabel>แบริ่ง</MiniLabel><MiniLabel>ระยะ</MiniLabel></div>
-        <PointRow label="M1" v1={m1.time} v2={m1.bearing} v3={m1.range} onC1={updatePoint(setM1)("time")} onC2={updatePoint(setM1)("bearing")} onC3={updatePoint(setM1)("range")} p1="HHMM" p2="°T" p3="yds" />
-        <PointRow label="M2" v1={m2.time} v2={m2.bearing} v3={m2.range} onC1={updatePoint(setM2)("time")} onC2={updatePoint(setM2)("bearing")} onC3={updatePoint(setM2)("range")} p1="HHMM" p2="°T" p3="yds" />
+        <PointRow label="M1" v1={m1.time} v2={m1.bearing} v3={m1.range} onC1={updatePoint(setM1)("time")} onC2={updatePoint(setM1)("bearing")} onC3={updatePoint(setM1)("range")} p1="HHMM" p2="°T" p3={rangeUnit === "nm" ? "NM" : "yds"} />
+        <PointRow label="M2" v1={m2.time} v2={m2.bearing} v3={m2.range} onC1={updatePoint(setM2)("time")} onC2={updatePoint(setM2)("bearing")} onC3={updatePoint(setM2)("range")} p1="HHMM" p2="°T" p3={rangeUnit === "nm" ? "NM" : "yds"} />
         <SubDivider />
         <SectionLabel>Own Ship</SectionLabel>
         <div style={rowGrid3} className="mb-1.5"><div /><MiniLabel>เข็ม</MiniLabel><MiniLabel>ความเร็ว</MiniLabel></div>
@@ -321,13 +368,15 @@ function TargetSpeedTab() {
    TAB 2: Wind Problems (True Wind / Desired Relative Wind)
    ============================================================ */
 function WindTab() {
-  const [mode, setMode] = useState("true"); // 'true' | 'desired'
-  const [scale, setScale] = useState(3);
-  const [own, setOwn] = useState({ course: "", speed: "" });
-  const [rw, setRw] = useState({ side: "starboard", angle: "", speed: "" }); // wind from, measured from bow on selected side
-  const [tw, setTw] = useState({ from: "", speed: "" }); // true wind (known, for 'desired' mode)
-  const [desired, setDesired] = useState({ side: "starboard", angle: "", speed: "" });
-  const [result, setResult] = useState(null);
+  const [mode, setMode] = useSessionState("wind.mode", "true"); // 'true' | 'desired'
+  const [plotMethod, setPlotMethod] = useSessionState("wind.plotMethod", "flexible");
+  const [plotStep, setPlotStep] = useSessionState("wind.plotStep", "5");
+  const [scale, setScale] = useSessionState("wind.scale", 3);
+  const [own, setOwn] = useSessionState("wind.own", { course: "", speed: "" });
+  const [rw, setRw] = useSessionState("wind.relative", { side: "starboard", angle: "", speed: "" }); // wind from, measured from bow on selected side
+  const [tw, setTw] = useSessionState("wind.true", { from: "", speed: "" }); // true wind (known, for 'desired' mode)
+  const [desired, setDesired] = useSessionState("wind.desired", { side: "starboard", angle: "", speed: "" });
+  const [result, setResult] = useSessionState("wind.result", null);
   const [error, setError] = useState("");
   const z = useZoomPan();
 
@@ -345,7 +394,7 @@ function WindTab() {
     const ew = vAdd(er, awVec);
     const twFrom = mod360(vBrg(ew) + 180);
     const twSpeed = vLen(ew);
-    setScale(idealScaleForSpeed(Math.max(So, rwSpeed, twSpeed)));
+    if (exceedsBoard(Math.max(So, rwSpeed, twSpeed), scale)) { setError(`เวกเตอร์เกินขอบกระดานที่สเกล ${scale}:1 กรุณาเลือกสเกลที่สูงขึ้น`); setResult(null); return; }
     setResult({ mode: "true", er, ew, awTip: ew, twFrom, twSpeed });
   }
 
@@ -355,8 +404,8 @@ function WindTab() {
     const dAngle = parseFloat(desired.angle), dSpeed = parseFloat(desired.speed);
     if ([twFrom, twSpeed, dAngle, dSpeed].some((v) => Number.isNaN(v))) { setError("กรอกข้อมูลให้ครบทุกช่อง"); setResult(null); return; }
     if (dAngle < 0 || dAngle > 180 || dSpeed <= 0 || twSpeed < 0) { setError("มุมลมสัมพันธ์ต้องอยู่ระหว่าง 000-180° และความเร็วต้องถูกต้อง"); setResult(null); return; }
-    const dFrom = relativeFromBearing(desired.side, dAngle);
-    const delta = mod360(dFrom + 180); // offset of apparent-wind(toward) relative to ship's head
+    const signed = desired.side === "starboard" ? dAngle : -dAngle;
+    const delta = mod360(180 + signed); // apparent-wind (toward) relative to ship's head
     const rad = toRad(delta);
     const cosD = Math.cos(rad), sinD = Math.sin(rad);
     const disc = twSpeed * twSpeed - dSpeed * dSpeed * sinD * sinD;
@@ -365,7 +414,7 @@ function WindTab() {
     const wDirToward = mod360(twFrom + 180);
     const speeds = [...new Set([-dSpeed * cosD + sq, -dSpeed * cosD - sq].map((s) => +s.toFixed(10)))]
       .filter((s) => s > 0.05)
-      .sort((a, b) => a - b);
+      .sort((a, b) => b - a);
     if (speeds.length === 0) { setError("ไม่มีคำตอบที่เป็นไปได้ (ความเร็วเรือติดลบ)"); setResult(null); return; }
     const solutions = speeds.map((So, index) => {
       const phi = toDeg(Math.atan2(dSpeed * sinD, So + dSpeed * cosD));
@@ -376,11 +425,12 @@ function WindTab() {
       const checkAwToward = vSub(ew, er);
       const checkAwFromTrue = mod360(vBrg(checkAwToward) + 180);
       const checkRel = bearingToRelativeSide(mod360(checkAwFromTrue - Co));
-      return { Co, So, er, ew, awTip: ew, checkRel, checkRelSpeed: vLen(checkAwToward), label: index === 0 ? "เข็มทวนลม (ความเร็วต่ำ)" : "เข็มตามลม (ความเร็วสูง)" };
+      return { id: index === 0 ? "r1" : "r2", Co, So, er, ew, awTip: ew, checkRel, checkRelSpeed: vLen(checkAwToward), label: index === 0 ? "เข็มตามลม (ความเร็วสูง)" : "เข็มทวนลม (ความเร็วต่ำ)" };
     });
     const primary = solutions[0];
-    setScale(idealScaleForSpeed(Math.max(twSpeed, dSpeed, ...solutions.map((s) => s.So))));
-    setResult({ mode: "desired", solutions, ...primary });
+    if (exceedsBoard(Math.max(twSpeed, dSpeed, ...solutions.map((s) => s.So)), scale)) { setError(`เวกเตอร์เกินขอบกระดานที่สเกล ${scale}:1 กรุณาเลือกสเกลที่สูงขึ้น`); setResult(null); return; }
+    setPlotStep("5");
+    setResult({ mode: "desired", solutions, ...primary, twFrom: mod360(twFrom), twSpeed, dAngle, dSpeed, signed, wDirToward });
   }
 
   function generateProblem() {
@@ -392,8 +442,10 @@ function WindTab() {
       setRw({ side, angle: String(Math.floor(Math.random() * 121)), speed: String(rs(12, 35)) });
     } else {
       const twSpeed = rs(7, 14);
+      const desiredSpeed = rs(twSpeed * 1.15, twSpeed * 1.8);
       setTw({ from: String(rc()).padStart(3, "0"), speed: String(twSpeed) });
-      setDesired({ side, angle: String(Math.floor(Math.random() * 9)), speed: String(rs(twSpeed + 12, twSpeed + 24)) });
+      setDesired({ side, angle: "30", speed: String(desiredSpeed) });
+      setScale(idealScaleForSpeed(twSpeed + desiredSpeed));
     }
     setResult(null); setError("");
   }
@@ -405,20 +457,54 @@ function WindTab() {
   }
 
   const sc = (xy) => xyToScreenSpeedScaled(xy.x, xy.y, scale);
+  const step = Number(plotStep);
+  const pointMark = (xy, label, color, key) => { const p = sc(xy); return <g key={key}><circle cx={p.sx} cy={p.sy} r="6" fill={color} stroke={PAPER} strokeWidth="1.5"/><text x={p.sx + 9} y={p.sy - 9} fontSize="18" fontFamily={FONT_MONO} fill={color} fontWeight="700">{label}</text></g>; };
+  const desiredPlot = result?.mode === "desired" && (() => {
+    const e = { x: 0, y: 0 }, w = result.ew;
+    if (plotMethod === "flexible") {
+      const t = { x: w.x / 2, y: w.y / 2 };
+      const sideTurn = result.signed > 0 ? 90 : -90;
+      const h = result.twSpeed / (2 * Math.tan(toRad(result.dAngle)));
+      const o = vAdd(t, polarToXY(mod360(result.wDirToward + sideTurn), h));
+      const locusR = Math.abs(result.twSpeed / (2 * Math.sin(toRad(result.dAngle))));
+      const n = polarToXY(mod360(result.wDirToward + sideTurn), result.twSpeed * 2);
+      const na = sc(vSub(t, n)), nb = sc(vAdd(t, n)), op = sc(o), wp = sc(w);
+      return <g>
+        {step >= 1 && <line x1={CENTER.x} y1={CENTER.y} x2={wp.sx} y2={wp.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)"/>}
+        {step >= 1 && pointMark(w, "w", AMBER, "w")}{step >= 1 && pointMark(e, "e", AMBER, "e")}
+        {step >= 2 && <line x1={na.sx} y1={na.sy} x2={nb.sx} y2={nb.sy} stroke={INK_SOFT} strokeWidth="1.2" strokeDasharray="6 6"/>}{step >= 2 && pointMark(t, "t", INK, "t")}
+        {step >= 3 && <circle cx={op.sx} cy={op.sy} r={valueToPx(locusR, scale)} fill="none" stroke="#A879E8" strokeWidth="1.2" strokeDasharray="7 5"/>}{step >= 3 && pointMark(o, "o", "#A879E8", "o")}
+        {step >= 4 && <circle cx={wp.sx} cy={wp.sy} r={valueToPx(result.dSpeed, scale)} fill="none" stroke="#A879E8" strokeWidth="1.2" strokeDasharray="7 5"/>}
+        {step >= 4 && result.solutions.map(s => pointMark(s.er, s.id, s.id === "r1" ? ER_BLUE : CRIMSON, s.id))}
+        {step >= 5 && result.solutions.map(s => { const p=sc(s.er); return <g key={`v-${s.id}`}><line x1={CENTER.x} y1={CENTER.y} x2={p.sx} y2={p.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)"/><line x1={p.sx} y1={p.sy} x2={wp.sx} y2={wp.sy} stroke={CRIMSON} strokeWidth="1.4" strokeDasharray="7 5" markerEnd="url(#arrowCrimson)"/></g>; })}
+      </g>;
+    }
+    const o = polarToXY(mod360(result.wDirToward - result.signed), result.dSpeed);
+    const op = sc(o), guide = sc(polarToXY(result.wDirToward, scale * RING_COUNT));
+    return <g>
+      {step >= 1 && <line x1={CENTER.x} y1={CENTER.y} x2={guide.sx} y2={guide.sy} stroke={AMBER} strokeWidth="2" markerEnd="url(#arrowAmber)"/>}
+      {step >= 1 && pointMark(result.ew, "w", AMBER, "w")}{step >= 1 && pointMark(e, "e", AMBER, "e")}
+      {step >= 3 && <line x1={CENTER.x} y1={CENTER.y} x2={op.sx} y2={op.sy} stroke={CRIMSON} strokeWidth="1.4" strokeDasharray="7 5" markerEnd="url(#arrowCrimson)"/>}{step >= 3 && pointMark(o, "o", "#A879E8", "o")}
+      {step >= 4 && <circle cx={op.sx} cy={op.sy} r={valueToPx(result.twSpeed, scale)} fill="none" stroke="#A879E8" strokeWidth="1.2" strokeDasharray="7 5"/>}
+      {step >= 4 && result.solutions.map(s => pointMark(polarToXY(result.wDirToward, s.So), s.id, s.id === "r1" ? ER_BLUE : CRIMSON, s.id))}
+      {step >= 5 && result.solutions.map(s => { const p=sc(polarToXY(result.wDirToward,s.So)); return <line key={`or-${s.id}`} x1={op.sx} y1={op.sy} x2={p.sx} y2={p.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)"/>; })}
+    </g>;
+  })();
   const boardVectors = result && (
     <g>
-      {(() => { const a = sc(result.er), b = sc(result.awTip); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
-      {(() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)" />; })()}
-      {(() => { const a = sc(result.er); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={ER_BLUE_DEEP} textAnchor="middle" fontWeight="700">er</text>; })()}
-      {(() => { const a = sc(result.ew); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
-      {(() => { const a = sc(result.ew); return <text x={a.sx} y={a.sy - 17} fontSize="20" fontFamily={FONT_MONO} fill={CRIMSON} textAnchor="middle" fontWeight="700">ew</text>; })()}
+      {result.mode === "true" && (() => { const a = sc(result.er), b = sc(result.awTip); return <line x1={a.sx} y1={a.sy} x2={b.sx} y2={b.sy} stroke={INK} strokeWidth="1.4" strokeDasharray="3 5" opacity="0.9" markerEnd="url(#arrowInk)" />; })()}
+      {result.mode === "true" && (() => { const a = sc(result.er); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={ER_BLUE} strokeWidth="2" markerEnd="url(#arrowEr)" />; })()}
+      {result.mode === "true" && (() => { const a = sc(result.ew); return <line x1={CENTER.x} y1={CENTER.y} x2={a.sx} y2={a.sy} stroke={CRIMSON} strokeWidth="2" markerEnd="url(#arrowCrimson)" />; })()}
+      {desiredPlot}
     </g>
   );
 
   return (
     <TabShell>
       <ModeRow options={[["true", "หา True Wind"], ["desired", "เข็มรับ ฮ."]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
+      {mode === "desired" && <ModeRow options={[["flexible", "แบบอ่อนตัว"], ["rigid", "แบบแข็งตัว"]]} value={plotMethod} onChange={(v) => { setPlotMethod(v); setPlotStep("1"); }} />}
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
+      {result?.mode === "desired" && <SolutionSteps method={plotMethod} step={step} setStep={(n) => setPlotStep(String(n))} result={result} scale={scale} />}
       <ScaleRow scale={scale} setScale={setScale} extra={`ความเร็วสูงสุด ${RING_COUNT * scale} kt`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' />
 
       <ResultCard>
@@ -466,7 +552,7 @@ function WindTab() {
         )}
         {error && <ErrorText>{error}</ErrorText>}
       </InputCard>
-      <ZoomModal z={z}><BoardChrome>{boardVectors}</BoardChrome></ZoomModal>
+      <ZoomModal z={z} stepControls={result?.mode === "desired" ? <StepArrows step={step} setStep={(n) => setPlotStep(String(n))} /> : null}><BoardChrome>{boardVectors}</BoardChrome></ZoomModal>
     </TabShell>
   );
 }
@@ -475,23 +561,24 @@ function WindTab() {
    TAB 3: Station Keeping (Changing Station)
    ============================================================ */
 function StationTab() {
-  const [mode, setMode] = useState("byTime"); // 'byTime' | 'byCourse' | 'bySpeed' | 'minSpeed'
-  const [centerMode, setCenterMode] = useState("ownship"); // 'ownship' | 'guide'
-  const [scale, setScale] = useState(2);
-  const [guide, setGuide] = useState({ course: "", speed: "" });
-  const [m1, setM1] = useState({ bearing: "", range: "" });
-  const [m2, setM2] = useState({ bearing: "", range: "" });
-  const [timeMinInput, setTimeMinInput] = useState("");
-  const [courseInput, setCourseInput] = useState("");
-  const [speedInput, setSpeedInput] = useState("");
-  const [result, setResult] = useState(null);
+  const [mode, setMode] = useSessionState("station.mode", "byTime"); // 'byTime' | 'byCourse' | 'bySpeed' | 'minSpeed'
+  const [centerMode, setCenterMode] = useSessionState("station.centerMode", "ownship"); // 'ownship' | 'guide'
+  const [scale, setScale] = useSessionState("station.scale", 2);
+  const [rangeUnit, setRangeUnit] = useSessionState("station.rangeUnit", "yd");
+  const [guide, setGuide] = useSessionState("station.guide", { course: "", speed: "" });
+  const [m1, setM1] = useSessionState("station.m1", { bearing: "", range: "" });
+  const [m2, setM2] = useSessionState("station.m2", { bearing: "", range: "" });
+  const [timeMinInput, setTimeMinInput] = useSessionState("station.time", "");
+  const [courseInput, setCourseInput] = useSessionState("station.course", "");
+  const [speedInput, setSpeedInput] = useSessionState("station.speed", "");
+  const [result, setResult] = useSessionState("station.result", null);
   const [error, setError] = useState("");
   const z = useZoomPan();
 
   function baseParse() {
     const Cg = parseFloat(guide.course), Sg = parseFloat(guide.speed);
-    const b1 = parseFloat(m1.bearing), r1yd = parseFloat(m1.range);
-    const b2 = parseFloat(m2.bearing), r2yd = parseFloat(m2.range);
+    const b1 = parseFloat(m1.bearing), r1yd = rangeToYards(m1.range, rangeUnit);
+    const b2 = parseFloat(m2.bearing), r2yd = rangeToYards(m2.range, rangeUnit);
     return { Cg, Sg, b1, r1yd, b2, r2yd };
   }
 
@@ -557,7 +644,8 @@ function StationTab() {
     }
 
     const er = polarToXY(Co, So);
-    setScale(Math.max(idealScaleForRangeYards(Math.max(r1yd, r2yd)), idealScaleForSpeed(Math.max(So, Sg))));
+    const maxPlot = Math.max(r1yd / 1000, r2yd / 1000, So, Sg, vLen(em));
+    if (exceedsBoard(maxPlot, scale)) { setError(`ข้อมูลเกินขอบกระดานที่สเกล ${scale}:1 กรุณาเลือกสเกลที่สูงขึ้น`); setResult(null); return; }
     setResult({ P1, P2, em, er, Co, So, timeMin, altNote });
   }
 
@@ -565,24 +653,35 @@ function StationTab() {
     setGuide({ course: "", speed: "" }); setM1({ bearing: "", range: "" }); setM2({ bearing: "", range: "" });
     setTimeMinInput(""); setCourseInput(""); setSpeedInput(""); setResult(null); setError("");
   }
+  function changeRangeUnit(nextUnit) {
+    if (nextUnit === rangeUnit) return;
+    const convert = (point) => ({ ...point, range: point.range === "" ? "" : String(yardsToRange(rangeToYards(point.range, rangeUnit), nextUnit)) });
+    setM1(convert); setM2(convert); setRangeUnit(nextUnit);
+  }
 
   function generateProblem() {
     const rc = () => Math.floor(Math.random() * 360);
     const rs = (a, b) => +(a + Math.random() * (b - a)).toFixed(1);
-    const Cg = rc(), Sg = rs(12, 22), Co = rc(), So = rs(16, 30);
-    const em = polarToXY(Cg, Sg), er = polarToXY(Co, So);
+    let Cg, Sg, Co, So, em, er, rm, SRM, dir, T, P1, P2;
     const sign = centerMode === "ownship" ? -1 : 1;
-    const rm = { x: (er.x - em.x) / sign, y: (er.y - em.y) / sign };
-    const SRM = Math.max(vLen(rm), 0.1), dir = vBrg(rm);
-    const T = Math.floor(rs(10, 26));
-    const P1 = polarToXY(rc(), rs(2.5, 5.5));
-    const P2 = vAdd(P1, polarToXY(dir, SRM * T / 60));
+    do {
+      Cg = rc(); Sg = rs(8, 16); Co = rc(); So = rs(10, 18);
+      em = polarToXY(Cg, Sg); er = polarToXY(Co, So);
+      rm = { x: (er.x - em.x) / sign, y: (er.y - em.y) / sign };
+      SRM = Math.max(vLen(rm), 0.1); dir = vBrg(rm);
+      T = Math.floor(rs(5, 10)); P1 = polarToXY(rc(), rs(1, 3));
+      P2 = vAdd(P1, polarToXY(dir, SRM * T / 60));
+    } while (Math.max(vLen(P1), vLen(P2)) * YARDS_PER_NM > 20000);
+    const maxRangeYd = Math.max(vLen(P1), vLen(P2)) * YARDS_PER_NM;
+    const nextUnit = maxRangeYd > 2 * YARDS_PER_NM ? "nm" : "yd";
+    setRangeUnit(nextUnit);
     setGuide({ course: String(Cg).padStart(3, "0"), speed: String(Sg) });
-    setM1({ bearing: String(Math.round(vBrg(P1))).padStart(3, "0"), range: String(Math.round(vLen(P1) * YARDS_PER_NM)) });
-    setM2({ bearing: String(Math.round(vBrg(P2))).padStart(3, "0"), range: String(Math.round(vLen(P2) * YARDS_PER_NM)) });
+    setM1({ bearing: String(Math.round(vBrg(P1))).padStart(3, "0"), range: String(yardsToRange(vLen(P1) * YARDS_PER_NM, nextUnit)) });
+    setM2({ bearing: String(Math.round(vBrg(P2))).padStart(3, "0"), range: String(yardsToRange(vLen(P2) * YARDS_PER_NM, nextUnit)) });
     setTimeMinInput(String(T));
     setCourseInput(String(Co).padStart(3, "0"));
     setSpeedInput(String(So));
+    setScale(Math.max(idealScaleForRangeYards(Math.max(vLen(P1), vLen(P2)) * YARDS_PER_NM), idealScaleForSpeed(Math.max(So, Sg))));
     setResult(null); setError("");
   }
 
@@ -610,7 +709,7 @@ function StationTab() {
       <ModeRow options={[["ownship", "เรือเราอยู่ศูนย์กลาง"], ["guide", "Guide อยู่ศูนย์กลาง"]]} value={centerMode} onChange={(v) => { setCenterMode(v); setResult(null); setError(""); }} />
       <ModeRow options={[["byTime", "ด้วยเวลา"], ["byCourse", "ด้วยเข็ม"], ["bySpeed", "ด้วยความเร็ว"], ["minSpeed", "ความเร็วต่ำสุด"]]} value={mode} onChange={(v) => { setMode(v); setResult(null); setError(""); }} />
       <BoardCard zOpen={z.open}><BoardChrome>{boardVectors}</BoardChrome></BoardCard>
-      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note='ระบบเลือกสเกลให้อัตโนมัติหลังคำนวณ' showDistanceRemark />
+      <ScaleRow scale={scale} setScale={setScale} extra={`ระยะสูงสุด ${(RING_COUNT * scale * 1000).toLocaleString()} yds`} note="การสุ่มโจทย์จะเลือกสเกลเริ่มต้นที่เหมาะสมให้" showDistanceRemark />
 
       <ResultCard>
         {result ? (
@@ -629,9 +728,10 @@ function StationTab() {
         <TwoField l1="เข็ม °T" l2="ความเร็ว kt" v1={guide.course} v2={guide.speed} onC1={(e) => setGuide((p) => ({ ...p, course: e.target.value }))} onC2={(e) => setGuide((p) => ({ ...p, speed: e.target.value }))} p1="°T" p2="kt" />
         <SubDivider />
         <SectionLabel>{centerMode === "ownship" ? "ตำแหน่ง Guide เทียบเรา" : "ตำแหน่งเราเทียบ Guide"} — ปัจจุบัน (M1) / สถานีใหม่ (M2)</SectionLabel>
+        <ModeRow options={[["yd", "ระยะเป็นหลา"], ["nm", "ระยะเป็น NM"]]} value={rangeUnit} onChange={changeRangeUnit} />
         <div style={rowGrid3} className="mb-1.5"><div /><MiniLabel>แบริ่ง</MiniLabel><MiniLabel>ระยะ</MiniLabel></div>
-        <div style={rowGrid3} className="items-center mb-1.5"><PointName>M1</PointName><Field value={m1.bearing} onChange={(e) => setM1((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m1.range} onChange={(e) => setM1((p) => ({ ...p, range: e.target.value }))} placeholder="yds" /></div>
-        <div style={rowGrid3} className="items-center"><PointName>M2</PointName><Field value={m2.bearing} onChange={(e) => setM2((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m2.range} onChange={(e) => setM2((p) => ({ ...p, range: e.target.value }))} placeholder="yds" /></div>
+        <div style={rowGrid3} className="items-center mb-1.5"><PointName>M1</PointName><Field value={m1.bearing} onChange={(e) => setM1((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m1.range} onChange={(e) => setM1((p) => ({ ...p, range: e.target.value }))} placeholder={rangeUnit === "nm" ? "NM" : "yds"} /></div>
+        <div style={rowGrid3} className="items-center"><PointName>M2</PointName><Field value={m2.bearing} onChange={(e) => setM2((p) => ({ ...p, bearing: e.target.value }))} placeholder="°T" /><Field value={m2.range} onChange={(e) => setM2((p) => ({ ...p, range: e.target.value }))} placeholder={rangeUnit === "nm" ? "NM" : "yds"} /></div>
         <SubDivider />
         {mode === "byTime" && (
           <>
@@ -759,12 +859,12 @@ function NomogramGraphic({ T, S, Dyd }) {
 }
 
 function TSDTab() {
-  const [mode, setMode] = useState("speed"); // 'speed' | 'time' | 'distance'
-  const [timeInput, setTimeInput] = useState("");
-  const [speedInput, setSpeedInput] = useState("");
-  const [distInput, setDistInput] = useState("");
-  const [distUnit, setDistUnit] = useState("yd");
-  const [result, setResult] = useState(null);
+  const [mode, setMode] = useSessionState("tsd.mode", "speed"); // 'speed' | 'time' | 'distance'
+  const [timeInput, setTimeInput] = useSessionState("tsd.time", "");
+  const [speedInput, setSpeedInput] = useSessionState("tsd.speed", "");
+  const [distInput, setDistInput] = useSessionState("tsd.distance", "");
+  const [distUnit, setDistUnit] = useSessionState("tsd.unit", "yd");
+  const [result, setResult] = useSessionState("tsd.result", null);
   const [error, setError] = useState("");
 
   function solve() {
@@ -918,9 +1018,12 @@ export default function App() {
       <div className="w-full max-w-md flex items-center justify-between px-4 pt-4 pb-3">
         <div className="flex items-center gap-2">
           <span style={{ color: AMBER, border: `1px solid ${AMBER}`, boxShadow: "0 0 12px rgba(79,216,232,0.18)" }} className="w-9 h-9 rounded-full inline-flex items-center justify-center text-lg">⚓</span>
-          <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.025em", color: TEXT_LIGHT, fontWeight: 400 }} className="text-[17px]">กระดานหนพื้นฐาน</span>
+          <div className="flex flex-col leading-none">
+            <span style={{ fontFamily: FONT_HEAD, letterSpacing: "0.025em", color: TEXT_LIGHT, fontWeight: 400 }} className="text-[17px]">กระดานหนพื้นฐาน</span>
+            <span style={{ color: "rgba(132,166,178,0.48)", fontFamily: FONT_MONO, letterSpacing: "0.06em" }} className="text-[9px] mt-1.5">v1.0 · อัปเดต 3 ก.ย. 2026</span>
+          </div>
         </div>
-        <span style={{ color: TEXT_LIGHT_MUTE, border: `1px solid ${PANEL_LINE}`, borderRadius: "7px", fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wider px-2 py-1.5">PUB.1310</span>
+        <span style={{ color: "rgba(132,166,178,0.48)", border: `1px solid rgba(111,176,193,0.16)`, borderRadius: "7px", fontFamily: FONT_MONO }} className="text-[10px] uppercase tracking-wider px-2 py-1.5">SORN7749</span>
       </div>
 
       <div className="w-full max-w-md grid grid-cols-4 gap-1 px-4">
@@ -986,6 +1089,38 @@ function BoardCard({ children, zOpen }) {
       </div>
     </div>
   );
+}
+
+function StepArrows({ step, setStep }) {
+  return <div style={{ background: "rgba(2,10,19,0.94)", border: `1px solid ${PANEL_LINE_BRIGHT}`, borderRadius: "9px", fontFamily: FONT_MONO }} className="flex items-center overflow-hidden">
+    <button onClick={() => setStep(Math.max(1, step - 1))} disabled={step <= 1} className="px-4 py-2.5" style={{ color: step <= 1 ? TEXT_MUTE : AMBER }}>‹</button>
+    <span className="px-3 text-[12px]" style={{ color: TEXT_LIGHT }}>{step}/5</span>
+    <button onClick={() => setStep(Math.min(5, step + 1))} disabled={step >= 5} className="px-4 py-2.5" style={{ color: step >= 5 ? TEXT_MUTE : AMBER }}>›</button>
+  </div>;
+}
+
+function SolutionSteps({ method, step, setStep, result, scale }) {
+  const [open, setOpen] = useState(false);
+  const rings = (v) => fmt(v / scale, 2);
+  const flexible = [
+    `ขีด ew ไปทาง ${fmtBrg(result.wDirToward)} ยาว ${fmt(result.twSpeed)} kt = ${rings(result.twSpeed)} วง`,
+    `แบ่ง ew ครึ่งหนึ่งเป็นจุด t แล้วลากเส้นตั้งฉากผ่าน t`,
+    `สร้างจุด o และวงกลมตำแหน่งมุมลมสัมพันธ์ ${fmt(result.dAngle)}°`,
+    `ใช้ w เป็นศูนย์กลาง รัศมี ${fmt(result.dSpeed)} kt = ${rings(result.dSpeed)} วง หาจุด r1 และ r2`,
+    `ลาก er1 และ er2 แล้วอ่านเข็ม/ความเร็วด้วยสเกล ${scale}:1`
+  ];
+  const rigid = [
+    `ขีดแนว ew ไปทาง ${fmtBrg(result.wDirToward)} และทำจุด w ที่ ${fmt(result.twSpeed)} kt = ${rings(result.twSpeed)} วง`,
+    `นับมุม ${fmt(result.dAngle)}° ${result.signed > 0 ? "ทวนเข็มนาฬิกา (หัวเรือขวา)" : "ตามเข็มนาฬิกา (หัวเรือซ้าย)"}`,
+    `กำหนดจุด o ที่ ${fmt(result.dSpeed)} kt = ${rings(result.dSpeed)} วงจาก e`,
+    `วงกลมศูนย์กลาง o รัศมี ${fmt(result.twSpeed)} kt ตัดแนว ew ที่ r1 และ r2`,
+    `ทิศ or คือเข็ม ส่วนระยะ e-r คือความเร็วเรือ ด้วยสเกล ${scale}:1`
+  ];
+  const steps = method === "flexible" ? flexible : rigid;
+  return <div className="w-full max-w-md rounded-xl overflow-hidden" style={{ border: `1px solid ${PANEL_LINE}`, background: PANEL }}>
+    <button onClick={() => setOpen(v => !v)} className="w-full flex justify-between items-center px-4 py-3" style={{ color: AMBER, background: "rgba(79,216,232,0.04)" }}><span>แสดงวิธีการแก้โจทย์ · {method === "flexible" ? "แบบอ่อนตัว" : "แบบแข็งตัว"}</span><span>{open ? "⌃" : "⌄"}</span></button>
+    {open && <div className="p-3"><div className="flex items-center justify-between gap-3"><StepArrows step={step} setStep={setStep}/><button onClick={() => setStep(5)} className="px-3 py-2 text-[12px] rounded-lg" style={{ border: `1px solid ${AMBER}`, color: AMBER }}>ทั้งหมด</button></div><div className="mt-3 text-[13px] leading-relaxed" style={{ color: TEXT_LIGHT_MUTE }}>{steps[step - 1]}</div></div>}
+  </div>;
 }
 function ResultCard({ children }) {
   return (
