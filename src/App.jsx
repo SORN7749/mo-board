@@ -205,49 +205,10 @@ function useZoomPan() {
   return { zoomed, zScale, zX, zY, open, close, onTouchStart, onTouchMove, onTouchEnd, onWheel };
 }
 
-function useBoundedPageScroll() {
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return undefined;
-    let startY = 0;
-    const onTouchStart = (event) => {
-      if (event.touches.length === 1) startY = event.touches[0].clientY;
-    };
-    const onTouchMove = (event) => {
-      if (event.target.closest?.("[data-board-zoom='true']")) return;
-      if (event.touches.length > 1) {
-        event.preventDefault();
-        return;
-      }
-      if (event.touches.length !== 1) return;
-      const deltaY = event.touches[0].clientY - startY;
-      const atTop = el.scrollTop <= 0;
-      const atBottom = Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight;
-      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) event.preventDefault();
-    };
-    const stopGesture = (event) => {
-      if (!event.target.closest?.("[data-board-zoom='true']")) event.preventDefault();
-    };
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: false });
-    el.addEventListener("gesturestart", stopGesture, { passive: false });
-    el.addEventListener("gesturechange", stopGesture, { passive: false });
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("gesturestart", stopGesture);
-      el.removeEventListener("gesturechange", stopGesture);
-    };
-  }, []);
-
-  return scrollRef;
-}
 function ZoomModal({ z, children, stepControls }) {
   if (!z.zoomed) return null;
   return (
-    <div data-board-zoom="true" style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
+    <div style={{ background: "#000" }} className="fixed inset-0 z-50 flex flex-col">
       <div className="flex items-center px-4 py-3 pr-16" style={{ background: BG, borderBottom: `1px solid ${PANEL_LINE}` }}>
         <span style={{ color: AMBER, fontFamily: FONT_MONO, textShadow: `0 0 8px rgba(79,216,232,0.5)` }} className="text-[10px] uppercase tracking-wide">⇕ Pinch / drag to pan &amp; zoom</span>
         <button onClick={z.close}
@@ -1034,7 +995,6 @@ function TabIcon({ id, active }) {
 }
 export default function App() {
   const [tab, setTab] = useState("target");
-  const pageScrollRef = useBoundedPageScroll();
   const tabs = [
     ["target", "TMA"],
     ["wind", "ปัญหาลม"],
@@ -1042,7 +1002,7 @@ export default function App() {
     ["tsd", "T-S-D"],
   ];
   return (
-    <div ref={pageScrollRef} style={{ background: `radial-gradient(circle at 50% -10%, rgba(18,62,82,0.24), transparent 32%), ${BG}`, fontFamily: FONT_BODY, height: "100dvh", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "none", WebkitOverflowScrolling: "touch", touchAction: "pan-y" }} className="w-full flex flex-col items-center">
+    <div style={{ background: `radial-gradient(circle at 50% -10%, rgba(18,62,82,0.24), transparent 32%), ${BG}`, fontFamily: FONT_BODY, minHeight: "100dvh" }} className="w-full flex flex-col items-center">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@300;400;500&display=swap');
         ::placeholder { color: #B7BEC3; opacity: 1; }
         body { font-weight: 400; line-height: 1.55; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
