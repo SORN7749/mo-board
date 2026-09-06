@@ -1322,8 +1322,12 @@ function RelativeWindField({ value, onChange, speedLabel = "ความเร�
   );
 }
 function Field({ value, onChange, placeholder }) {
+  const handleChange = (event) => {
+    const nextValue = event.target.value;
+    if (nextValue === "" || /^\d*(?:\.\d{0,1})?$/.test(nextValue)) onChange(event);
+  };
   return (
-    <input value={value} onChange={onChange} placeholder={placeholder} inputMode="numeric"
+    <input value={value} onChange={handleChange} placeholder={placeholder} inputMode="decimal"
       style={{ border: "1px solid rgba(79,216,232,0.42)", borderRadius: "4px", padding: "11px 7px", fontFamily: FONT_MONO, fontWeight: 400, color: TEXT_LIGHT, width: "100%", textAlign: "center", background: "#01050A", boxShadow: "inset 0 2px 10px rgba(0,0,0,0.88), inset 0 0 0 1px rgba(255,255,255,0.015)", transition: "border-color 0.15s ease, box-shadow 0.15s ease" }} />
   );
 }
