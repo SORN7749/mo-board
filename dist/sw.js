@@ -1,4 +1,4 @@
-const CACHE_NAME = "mo-board-v1.1.0";
+const CACHE_NAME = "mo-board-v1.1.1";
 const APP_SHELL = ["./", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -40,4 +40,3 @@ self.addEventListener("fetch", (event) => {
     })),
   );
 });
-
