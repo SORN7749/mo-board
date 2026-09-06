@@ -1,0 +1,16 @@
+{
+  "name": "กระดานหนพื้นฐาน",
+  "short_name": "กระดานหน",
+  "description": "เครื่องมือคำนวณ Maneuvering Board สำหรับการเดินเรือ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#020a13",
+  "theme_color": "#020a13",
+  "orientation": "any",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+
